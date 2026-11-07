@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeMute
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WbSunny
@@ -42,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,10 +59,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.media3.exoplayer.ExoPlayer
 import com.livewall.app.data.PlaybackTrigger
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.model.WallpaperItem
 import com.livewall.app.service.LiveWallpaperService
+import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.components.VideoPlayerView
 import com.livewall.app.ui.theme.ShapePill
 
@@ -73,6 +78,7 @@ fun PreviewSheet(
     onApplied: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var playerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
     var isMuted by remember { mutableStateOf(prefs.isMuted) }
     var currentTrigger by remember { mutableStateOf(prefs.trigger) }
@@ -167,8 +173,39 @@ fun PreviewSheet(
                     }
                 }
 
-                // Action Pills: Replay & Sound
+                // Action Pills: Sync Palette, Replay & Sound
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Sync Samsung / Material You Color Palette Button
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.60f),
+                        contentColor = Color.White,
+                        shadowElevation = 6.dp,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                scope.launch(Dispatchers.IO) {
+                                    val ok = WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, wallpaper)
+                                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                        if (ok) {
+                                            Toast.makeText(
+                                                context,
+                                                "Palette synced! Go to Phone Settings > Wallpaper and style > Color palette",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        } else {
+                                            Toast.makeText(context, "Could not sync static wallpaper palette", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Rounded.Palette, contentDescription = "Sync Palette", modifier = Modifier.size(20.dp))
+                        }
+                    }
+
                     // Replay Button
                     Surface(
                         shape = CircleShape,
@@ -254,6 +291,11 @@ fun PreviewSheet(
                         prefs.selectWallpaper(wallpaper)
                         prefs.trigger = currentTrigger
                         prefs.isMuted = isMuted
+
+                        // Sync static frame for Samsung One UI Color Palette daemon
+                        scope.launch(Dispatchers.IO) {
+                            WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, wallpaper)
+                        }
 
                         try {
                             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {

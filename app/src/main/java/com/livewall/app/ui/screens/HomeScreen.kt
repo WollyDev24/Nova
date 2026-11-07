@@ -70,6 +70,7 @@ import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.model.WallpaperItem
 import com.livewall.app.service.LiveWallpaperService
+import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.components.CollectionBannerCard
 import com.livewall.app.ui.components.TriggerSelector
 import com.livewall.app.ui.theme.LiveWallThemeState
@@ -175,6 +176,10 @@ fun HomeScreen(
     fun applyLiveWallpaper(item: WallpaperItem) {
         prefs.selectWallpaper(item)
         activeWallpaperId = item.id
+        // Sync static bitmap in background for Samsung One UI & system Color Palette
+        scope.launch(Dispatchers.IO) {
+            WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, item)
+        }
         try {
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                 putExtra(

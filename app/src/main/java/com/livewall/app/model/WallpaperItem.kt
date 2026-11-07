@@ -16,33 +16,33 @@ data class WallpaperItem(
             // Xiaomi 18 Pro Max
             WallpaperItem(
                 id = "xiaomi_18_pro_max_wh",
-                title = "Pure White",
+                title = "Aquamarine Crystal",
                 collection = "Xiaomi 18 Pro Max",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro-Max/wallpaper_WH.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro-Max/wallpaper_WH.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Clean minimalist glass refraction wallpaper."
+                description = "Clean minimalist glass aquamarine refraction wallpaper."
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_max_bk",
-                title = "Obsidian Black",
+                title = "Obsidian Amber",
                 collection = "Xiaomi 18 Pro Max",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro-Max/wallpaper_BK.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro-Max/wallpaper_BK.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Deep dark luxury obsidian geometric animation."
+                description = "Deep luxury amber and obsidian geometric animation."
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_max_cy",
-                title = "Cyber Cyan",
+                title = "Cyber Crimson",
                 collection = "Xiaomi 18 Pro Max",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro-Max/wallpaper_CY.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro-Max/wallpaper_CY.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Vibrant electric cyan crystal reveal animation."
+                description = "Vibrant electric scarlet ruby reveal animation."
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_max_db",
@@ -56,65 +56,65 @@ data class WallpaperItem(
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_max_pk",
-                title = "Blush Pink",
+                title = "Blush Magenta",
                 collection = "Xiaomi 18 Pro Max",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro-Max/wallpaper_PK.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro-Max/wallpaper_PK.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Soft warm metallic rose petal unlock transition."
+                description = "Soft warm metallic magenta petal unlock transition."
             ),
 
             // Xiaomi 18 Pro
             WallpaperItem(
                 id = "xiaomi_18_pro_light01",
-                title = "Amber Light",
+                title = "Electric Cobalt",
                 collection = "Xiaomi 18 Pro",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro/Light01.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro/Light01.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Radiant amber light beam expanding on wake."
+                description = "Radiant royal cobalt light beam expanding on wake."
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_light02",
-                title = "Emerald Aurora",
+                title = "Emerald Teal",
                 collection = "Xiaomi 18 Pro",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro/Light02.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro/Light02.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Flowing emerald green cosmic light."
+                description = "Flowing emerald teal cosmic light."
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_light03",
-                title = "Violet Prism",
+                title = "Deep Indigo",
                 collection = "Xiaomi 18 Pro",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro/Light03.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro/Light03.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Prismatic violet beam with neon refraction."
+                description = "Prismatic deep indigo beam with neon refraction."
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_light04",
-                title = "Solar Flare",
+                title = "Crimson Flame",
                 collection = "Xiaomi 18 Pro",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro/Light04.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro/Light04.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Warm golden horizon flare expanding to static."
+                description = "Vivid crimson horizon flare expanding to static."
             ),
             WallpaperItem(
                 id = "xiaomi_18_pro_light05",
-                title = "Glacier Mist",
+                title = "Golden Amber",
                 collection = "Xiaomi 18 Pro",
                 videoUri = "asset:///wallpapers/Xiaomi-18-Pro/Light05.mp4",
                 thumbnailUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro/Light05.webp",
                 durationSec = 2.0f,
                 resolution = "1120x2436",
-                description = "Cool glacial blue light dispersion."
+                description = "Warm radiant golden amber light dispersion."
             ),
 
             // ColorOS
@@ -126,7 +126,7 @@ data class WallpaperItem(
                 thumbnailUri = "file:///android_asset/thumbnails/ColorOS/ColorOS17.webp",
                 durationSec = 4.0f,
                 resolution = "1080x1080",
-                description = "Signature ColorOS fluid silk wave dynamic animation."
+                description = "Signature ColorOS fluid sunset silk wave dynamic animation."
             )
         )
 

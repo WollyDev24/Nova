@@ -234,6 +234,7 @@ class LiveWallpaperService : WallpaperService() {
         override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
             when (key) {
                 WallpaperPreferences.KEY_SELECTED_URI -> {
+                    cachedWallpaperColors = null
                     loadCurrentWallpaper()
                     replayVideo()
                 }
