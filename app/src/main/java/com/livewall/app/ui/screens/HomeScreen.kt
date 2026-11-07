@@ -302,17 +302,6 @@ fun HomeScreen(
                 )
             }
 
-            // Quick Playback Trigger Selector
-            item {
-                TriggerSelector(
-                    selectedTrigger = activeTrigger,
-                    onTriggerSelected = { newTrigger ->
-                        activeTrigger = newTrigger
-                        prefs.trigger = newTrigger
-                    }
-                )
-            }
-
             // Section Header: Collections
             item {
                 Row(
