@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -37,7 +38,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,6 +90,7 @@ fun PreviewSheet(
     val scope = rememberCoroutineScope()
     var playerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
     var currentTrigger by remember { mutableStateOf(prefs.trigger) }
+    var showPaletteFlyout by remember { mutableStateOf(false) }
 
     val initialIndex = remember(initialWallpaper.id, wallpapers) {
         val idx = wallpapers.indexOfFirst { it.id == initialWallpaper.id }
@@ -93,6 +98,10 @@ fun PreviewSheet(
     }
     val pagerState = rememberPagerState(initialPage = initialIndex) { wallpapers.size }
     val currentWallpaper = wallpapers.getOrNull(pagerState.currentPage) ?: initialWallpaper
+
+    val currentRgb = remember(currentWallpaper.id) {
+        WallpaperColorHelper.getWallpaperColorsRgb(context, currentWallpaper)
+    }
 
     // Full-screen immersive dialog: preview fills the entire display edge-to-edge
     Dialog(
@@ -259,9 +268,9 @@ fun PreviewSheet(
                     }
                 }
 
-                // Action Pills: Sync Palette, Replay & Sound
+                // Action Pills: Palette Flyout & Replay
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Sync Samsung / Material You Color Palette Button
+                    // Palette Flyout Trigger Button (Rewired to open colors flyout)
                     Surface(
                         shape = CircleShape,
                         color = Color.Black.copy(alpha = 0.60f),
@@ -271,25 +280,11 @@ fun PreviewSheet(
                             .size(44.dp)
                             .clip(CircleShape)
                             .clickable {
-                                scope.launch(Dispatchers.IO) {
-                                    val ok = WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, currentWallpaper)
-                                    withContext(Dispatchers.Main) {
-                                        if (ok) {
-                                            Toast.makeText(
-                                                context,
-                                                "Synced ${currentWallpaper.title} colors! Opening Wallpaper & style...",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                            WallpaperColorHelper.openSystemPaletteSettings(context)
-                                        } else {
-                                            Toast.makeText(context, "Could not sync static wallpaper palette", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
+                                showPaletteFlyout = true
                             }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(imageVector = Icons.Rounded.Palette, contentDescription = "Sync Palette", modifier = Modifier.size(20.dp))
+                            Icon(imageVector = Icons.Rounded.Palette, contentDescription = "View Palette", modifier = Modifier.size(20.dp))
                         }
                     }
 
@@ -401,6 +396,220 @@ fun PreviewSheet(
                         )
                     }
                 }
+            }
+
+            // 5. PALETTE FLYOUT DIALOG (Shows the 3 main wallpaper colors)
+            if (showPaletteFlyout) {
+                PaletteFlyoutDialog(
+                    wallpaper = currentWallpaper,
+                    primaryColor = currentRgb.first,
+                    secondaryColor = currentRgb.second,
+                    tertiaryColor = currentRgb.third,
+                    onDismiss = { showPaletteFlyout = false },
+                    onSyncSettings = {
+                        scope.launch(Dispatchers.IO) {
+                            val ok = WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, currentWallpaper)
+                            withContext(Dispatchers.Main) {
+                                showPaletteFlyout = false
+                                if (ok) {
+                                    Toast.makeText(
+                                        context,
+                                        "Synced ${currentWallpaper.title} colors! Opening Wallpaper & style...",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    WallpaperColorHelper.openSystemPaletteSettings(context)
+                                } else {
+                                    Toast.makeText(context, "Could not sync static wallpaper palette", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Modern floating flyout dialog showing the 3 main extracted wallpaper colors with swatches & hex codes.
+ */
+@Composable
+fun PaletteFlyoutDialog(
+    wallpaper: WallpaperItem,
+    primaryColor: Int,
+    secondaryColor: Int,
+    tertiaryColor: Int,
+    onDismiss: () -> Unit,
+    onSyncSettings: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = Color(0xFF1E222B),
+            contentColor = Color.White,
+            shadowElevation = 16.dp,
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .fillMaxWidth()
+                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(28.dp))
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Palette,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Wallpaper Palette",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text(
+                                text = wallpaper.title,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.70f)
+                            )
+                        }
+                    }
+
+                    FilledTonalIconButton(
+                        onClick = onDismiss,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = Color.White.copy(alpha = 0.10f),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                    }
+                }
+
+                // 3 Main Extracted Color Rows
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PaletteColorRow(
+                        title = "Primary Tone",
+                        role = "System buttons, toggles & accents",
+                        colorInt = primaryColor
+                    )
+                    PaletteColorRow(
+                        title = "Secondary Tone",
+                        role = "Tonal containers, cards & highlights",
+                        colorInt = secondaryColor
+                    )
+                    PaletteColorRow(
+                        title = "Tertiary Tone",
+                        role = "Ambient contrast & badge surfaces",
+                        colorInt = tertiaryColor
+                    )
+                }
+
+                // Action: Sync and launch system Palette settings
+                Button(
+                    onClick = onSyncSettings,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = ShapePill,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(imageVector = Icons.Rounded.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Sync & Open Phone Palette",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaletteColorRow(
+    title: String,
+    role: String,
+    colorInt: Int
+) {
+    val composeColor = Color(colorInt)
+    val hexString = "#%06X".format(0xFFFFFF and colorInt)
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color.White.copy(alpha = 0.07f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Circular color swatch
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(composeColor)
+                    .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = hexString,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
+                Text(
+                    text = role,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.60f)
+                )
             }
         }
     }

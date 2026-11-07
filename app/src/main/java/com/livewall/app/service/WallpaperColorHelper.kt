@@ -55,6 +55,22 @@ object WallpaperColorHelper {
     }
 
     /**
+     * Returns the 3 primary RGB colors for any wallpaper (curated or dynamically extracted).
+     */
+    fun getWallpaperColorsRgb(context: Context, wallpaper: WallpaperItem): Triple<Int, Int, Int> {
+        val curated = getCuratedRgb(wallpaper.id)
+        if (curated != null) return curated
+        val thumb = loadThumbnailBitmap(context, wallpaper.thumbnailUri)
+        return if (thumb != null) {
+            val top = extractTopRgb(thumb)
+            thumb.recycle()
+            top
+        } else {
+            Triple(0xFFFE874F.toInt(), 0xFFEA580C.toInt(), 0xFF9C27B0.toInt())
+        }
+    }
+
+    /**
      * Curated vivid colors extracted directly from the actual pixels of every bundled
      * super wallpaper.
      */
