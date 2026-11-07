@@ -191,9 +191,10 @@ fun PreviewSheet(
                                         if (ok) {
                                             Toast.makeText(
                                                 context,
-                                                "Palette synced! Go to Phone Settings > Wallpaper and style > Color palette",
-                                                Toast.LENGTH_LONG
+                                                "Synced ${wallpaper.title} colors! Opening Wallpaper & style...",
+                                                Toast.LENGTH_SHORT
                                             ).show()
+                                            WallpaperColorHelper.openSystemPaletteSettings(context)
                                         } else {
                                             Toast.makeText(context, "Could not sync static wallpaper palette", Toast.LENGTH_SHORT).show()
                                         }
