@@ -1,6 +1,7 @@
 package com.livewall.app.service
 
 import android.app.KeyguardManager
+import android.app.WallpaperColors
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -35,6 +36,7 @@ class LiveWallpaperService : WallpaperService() {
         private var keyguardManager: KeyguardManager? = null
         private var isScreenVisible = false
         private var hasPlayedThisUnlock = false
+        private var cachedWallpaperColors: WallpaperColors? = null
 
         private val screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -102,14 +104,37 @@ class LiveWallpaperService : WallpaperService() {
                 val mediaItem = MediaItem.fromUri(Uri.parse(uriStr))
                 p.setMediaItem(mediaItem)
                 p.prepare()
+                updateWallpaperColors()
             } catch (e: Exception) {
                 Log.e(tag, "Error loading media item: $uriStr", e)
+            }
+        }
+
+        override fun onComputeColors(): WallpaperColors? {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                if (cachedWallpaperColors == null) {
+                    cachedWallpaperColors = WallpaperColorHelper.computeColors(applicationContext, prefs.selectedWallpaperUri)
+                }
+                return cachedWallpaperColors ?: super.onComputeColors()
+            }
+            return null
+        }
+
+        private fun updateWallpaperColors() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                val newColors = WallpaperColorHelper.computeColors(applicationContext, prefs.selectedWallpaperUri)
+                if (newColors != null) {
+                    cachedWallpaperColors = newColors
+                    notifyColorsChanged()
+                    Log.d(tag, "Notified Android OS & Samsung One UI of updated WallpaperColors: $newColors")
+                }
             }
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
             player?.setVideoSurface(holder.surface)
+            updateWallpaperColors()
             triggerPlaybackCheck(isSurfaceCreated = true)
         }
 
