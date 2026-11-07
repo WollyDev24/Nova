@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">LiveWall</string>
+    <string name="wallpaper_service_label">LiveWall Video Wallpaper</string>
+    <string name="wallpaper_description">Cinematic video wallpapers with interactive screen-on and unlock transitions.</string>
+</resources>
