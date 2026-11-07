@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,6 +50,7 @@ import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.ui.components.TriggerSelector
 import com.livewall.app.ui.theme.LiveWallThemeState
+import com.livewall.app.ui.theme.ShapeBottomSheet
 import com.livewall.app.ui.theme.ShapeCard
 import com.livewall.app.ui.theme.ShapeDialog
 import com.livewall.app.ui.theme.ShapePill
@@ -68,15 +70,16 @@ fun SettingsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = ShapeDialog,
+        shape = ShapeBottomSheet,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+                .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 4.dp, bottom = 32.dp)
         ) {
             // Header
             Row(

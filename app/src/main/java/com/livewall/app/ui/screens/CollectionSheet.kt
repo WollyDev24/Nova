@@ -1,17 +1,17 @@
 package com.livewall.app.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.livewall.app.model.WallpaperItem
 import com.livewall.app.ui.components.WallpaperCard
-import com.livewall.app.ui.theme.ShapeDialog
+import com.livewall.app.ui.theme.ShapeBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,14 +44,16 @@ fun CollectionSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = ShapeDialog,
+        shape = ShapeBottomSheet,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
+                .padding(top = 4.dp, bottom = 32.dp)
         ) {
             // Header
             Row(
@@ -83,21 +85,26 @@ fun CollectionSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Grid of wallpapers in this collection
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(wallpapers, key = { it.id }) { item ->
-                    WallpaperCard(
-                        wallpaper = item,
-                        isSelected = item.id == activeWallpaperId,
-                        onClick = { onWallpaperSelected(item) }
-                    )
+            // Grid of wallpapers in this collection (2 columns)
+            wallpapers.chunked(2).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowItems.forEach { item ->
+                        Box(modifier = Modifier.weight(1f)) {
+                            WallpaperCard(
+                                wallpaper = item,
+                                isSelected = item.id == activeWallpaperId,
+                                onClick = { onWallpaperSelected(item) }
+                            )
+                        }
+                    }
+                    if (rowItems.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
+                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
