@@ -405,25 +405,7 @@ fun PreviewSheet(
                     primaryColor = currentRgb.first,
                     secondaryColor = currentRgb.second,
                     tertiaryColor = currentRgb.third,
-                    onDismiss = { showPaletteFlyout = false },
-                    onSyncSettings = {
-                        scope.launch(Dispatchers.IO) {
-                            val ok = WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, currentWallpaper)
-                            withContext(Dispatchers.Main) {
-                                showPaletteFlyout = false
-                                if (ok) {
-                                    Toast.makeText(
-                                        context,
-                                        "Synced ${currentWallpaper.title} colors! Opening Wallpaper & style...",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                    WallpaperColorHelper.openSystemPaletteSettings(context)
-                                } else {
-                                    Toast.makeText(context, "Could not sync static wallpaper palette", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    }
+                    onDismiss = { showPaletteFlyout = false }
                 )
             }
         }
@@ -439,8 +421,7 @@ fun PaletteFlyoutDialog(
     primaryColor: Int,
     secondaryColor: Int,
     tertiaryColor: Int,
-    onDismiss: () -> Unit,
-    onSyncSettings: () -> Unit
+    onDismiss: () -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -528,27 +509,6 @@ fun PaletteFlyoutDialog(
                         title = "Tertiary Tone",
                         role = "Ambient contrast & badge surfaces",
                         colorInt = tertiaryColor
-                    )
-                }
-
-                // Action: Sync and launch system Palette settings
-                Button(
-                    onClick = onSyncSettings,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp),
-                    shape = ShapePill,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Icon(imageVector = Icons.Rounded.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Sync & Open Phone Palette",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
                     )
                 }
             }
