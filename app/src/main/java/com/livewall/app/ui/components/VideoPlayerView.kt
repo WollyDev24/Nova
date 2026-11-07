@@ -57,6 +57,16 @@ fun VideoPlayerView(
         onPlayerReady(exoPlayer)
     }
 
+    LaunchedEffect(autoPlay) {
+        exoPlayer.playWhenReady = autoPlay
+        if (autoPlay) {
+            exoPlayer.seekTo(0)
+            exoPlayer.play()
+        } else {
+            exoPlayer.pause()
+        }
+    }
+
     LaunchedEffect(isMuted) {
         exoPlayer.volume = if (isMuted) 0f else 1f
     }

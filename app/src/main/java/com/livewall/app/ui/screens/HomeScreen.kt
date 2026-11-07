@@ -359,14 +359,16 @@ fun HomeScreen(
         )
     }
 
-    // Modal Preview Bottom Sheet
+    // Modal Preview Bottom Sheet (Supports horizontal swipe scrolling between wallpapers)
     previewWallpaper?.let { item ->
+        val previewList = selectedCollection?.items ?: allWallpapers
         PreviewSheet(
-            wallpaper = item,
+            initialWallpaper = item,
+            wallpapers = previewList,
             prefs = prefs,
             onDismiss = { previewWallpaper = null },
-            onApplied = {
-                activeWallpaperId = item.id
+            onApplied = { appliedItem ->
+                activeWallpaperId = appliedItem.id
                 activeTrigger = prefs.trigger
                 previewWallpaper = null
                 selectedCollection = null

@@ -21,8 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.VolumeMute
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
@@ -51,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -58,30 +63,39 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.media3.exoplayer.ExoPlayer
+import coil3.compose.AsyncImage
 import com.livewall.app.data.PlaybackTrigger
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.model.WallpaperItem
-import com.livewall.app.service.LiveWallpaperService
 import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.components.VideoPlayerView
 import com.livewall.app.ui.theme.ShapePill
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PreviewSheet(
-    wallpaper: WallpaperItem,
+    initialWallpaper: WallpaperItem,
+    wallpapers: List<WallpaperItem> = listOf(initialWallpaper),
     prefs: WallpaperPreferences,
     onDismiss: () -> Unit,
-    onApplied: () -> Unit
+    onApplied: (WallpaperItem) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var playerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
     var isMuted by remember { mutableStateOf(prefs.isMuted) }
     var currentTrigger by remember { mutableStateOf(prefs.trigger) }
+
+    val initialIndex = remember(initialWallpaper.id, wallpapers) {
+        val idx = wallpapers.indexOfFirst { it.id == initialWallpaper.id }
+        if (idx >= 0) idx else 0
+    }
+    val pagerState = rememberPagerState(initialPage = initialIndex) { wallpapers.size }
+    val currentWallpaper = wallpapers.getOrNull(pagerState.currentPage) ?: initialWallpaper
 
     // Full-screen immersive dialog: preview fills the entire display edge-to-edge
     Dialog(
@@ -96,17 +110,91 @@ fun PreviewSheet(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // 1. FULL-SCREEN VIDEO PLAYER (Edge-to-Edge)
-            VideoPlayerView(
-                videoUri = wallpaper.videoUri,
-                scalingMode = ScalingMode.CROP,
-                isMuted = isMuted,
-                autoPlay = true,
-                onPlayerReady = { playerInstance = it },
-                modifier = Modifier.fillMaxSize()
-            )
+            // 1. SWIPEABLE FULL-SCREEN HORIZONTAL PAGER
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                key = { page -> wallpapers.getOrNull(page)?.id ?: page.toString() }
+            ) { page ->
+                val item = wallpapers[page]
+                val isCurrent = page == pagerState.currentPage
 
-            // 2. Top Scrim Gradient & Top Bar
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (isCurrent) {
+                        VideoPlayerView(
+                            videoUri = item.videoUri,
+                            scalingMode = ScalingMode.CROP,
+                            isMuted = isMuted,
+                            autoPlay = true,
+                            onPlayerReady = { playerInstance = it },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        // High-res static thumbnail for adjacent pages while swiping
+                        AsyncImage(
+                            model = item.thumbnailUri,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
+
+            // 2. Navigation Chevrons (if multiple wallpapers available)
+            if (wallpapers.size > 1) {
+                if (pagerState.currentPage > 0) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.50f),
+                        contentColor = Color.White,
+                        shadowElevation = 4.dp,
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 12.dp)
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Previous Wallpaper",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (pagerState.currentPage < wallpapers.size - 1) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.50f),
+                        contentColor = Color.White,
+                        shadowElevation = 4.dp,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 12.dp)
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Next Wallpaper",
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. Top Scrim Gradient & Top Bar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -159,13 +247,14 @@ fun PreviewSheet(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = wallpaper.title,
+                            text = currentWallpaper.title,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
+                        val counterText = if (wallpapers.size > 1) " • ${pagerState.currentPage + 1}/${wallpapers.size}" else ""
                         Text(
-                            text = "${wallpaper.collection} • ${wallpaper.durationSec}s",
+                            text = "${currentWallpaper.collection}$counterText",
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.8f)
@@ -186,12 +275,12 @@ fun PreviewSheet(
                             .clip(CircleShape)
                             .clickable {
                                 scope.launch(Dispatchers.IO) {
-                                    val ok = WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, wallpaper)
-                                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                    val ok = WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, currentWallpaper)
+                                    withContext(Dispatchers.Main) {
                                         if (ok) {
                                             Toast.makeText(
                                                 context,
-                                                "Synced ${wallpaper.title} colors! Opening Wallpaper & style...",
+                                                "Synced ${currentWallpaper.title} colors! Opening Wallpaper & style...",
                                                 Toast.LENGTH_SHORT
                                             ).show()
                                             WallpaperColorHelper.openSystemPaletteSettings(context)
@@ -248,11 +337,10 @@ fun PreviewSheet(
                 }
             }
 
-            // 3. Bottom Scrim Gradient for floating controls
+            // 4. Bottom Controls Overlay
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
@@ -263,83 +351,79 @@ fun PreviewSheet(
                             )
                         )
                     )
-            )
-
-            // 4. FLOATING TRIGGER PILL & APPLY BUTTON (Aligned at bottom)
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 36.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // FLOATING TRIGGER PILL
-                FloatingTriggerPill(
-                    selectedTrigger = currentTrigger,
-                    onTriggerSelected = { newTrigger ->
-                        currentTrigger = newTrigger
-                        prefs.trigger = newTrigger
-                        // Test the trigger animation on selection
-                        playerInstance?.seekTo(0)
-                        playerInstance?.play()
-                    }
-                )
-
-                // Big Floating "Apply as Live Wallpaper" Pill Button
-                Button(
-                    onClick = {
-                        prefs.selectWallpaper(wallpaper)
-                        prefs.trigger = currentTrigger
-                        prefs.isMuted = isMuted
-
-                        // Sync static frame for Samsung One UI Color Palette daemon
-                        scope.launch(Dispatchers.IO) {
-                            WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, wallpaper)
-                        }
-
-                        try {
-                            val serviceClass = WallpaperColorHelper.getServiceClassForWallpaper(wallpaper.id)
-                            val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                                putExtra(
-                                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                                    ComponentName(context, serviceClass)
-                                )
-                            }
-                            context.startActivity(intent)
-                            Toast.makeText(context, "Applying \"${wallpaper.title}\"...", Toast.LENGTH_SHORT).show()
-                        } catch (_: Exception) {
-                            try {
-                                val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
-                                context.startActivity(fallbackIntent)
-                            } catch (_: Exception) {
-                                Toast.makeText(context, "Selected \"${wallpaper.title}\"", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-
-                        onApplied()
-                    },
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    shape = ShapePill,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 32.dp, top = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Wallpaper,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
+                    // Floating Trigger Selector Pill
+                    FloatingTriggerPill(
+                        selectedTrigger = currentTrigger,
+                        onTriggerSelected = { newTrigger ->
+                            currentTrigger = newTrigger
+                            prefs.trigger = newTrigger
+                        }
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Apply as Live Wallpaper",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+
+                    // Apply Button
+                    Button(
+                        onClick = {
+                            prefs.selectWallpaper(currentWallpaper)
+                            prefs.trigger = currentTrigger
+                            prefs.isMuted = isMuted
+
+                            // Sync static frame for Samsung One UI Color Palette daemon
+                            scope.launch(Dispatchers.IO) {
+                                WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, currentWallpaper)
+                            }
+
+                            try {
+                                val serviceClass = WallpaperColorHelper.getServiceClassForWallpaper(currentWallpaper.id)
+                                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                                    putExtra(
+                                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                                        ComponentName(context, serviceClass)
+                                    )
+                                }
+                                context.startActivity(intent)
+                                Toast.makeText(context, "Applying \"${currentWallpaper.title}\"...", Toast.LENGTH_SHORT).show()
+                            } catch (_: Exception) {
+                                try {
+                                    val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
+                                    context.startActivity(fallbackIntent)
+                                } catch (_: Exception) {
+                                    Toast.makeText(context, "Selected \"${currentWallpaper.title}\"", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+
+                            onApplied(currentWallpaper)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = ShapePill,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Wallpaper,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Apply as Live Wallpaper",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -412,7 +496,7 @@ private fun FloatingTriggerSegment(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -420,12 +504,10 @@ private fun FloatingTriggerSegment(
                 tint = contentColor,
                 modifier = Modifier.size(16.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = contentColor
             )
         }
