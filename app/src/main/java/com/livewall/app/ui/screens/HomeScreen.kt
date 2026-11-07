@@ -8,33 +8,20 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -42,7 +29,6 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Button
@@ -55,7 +41,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -63,7 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -73,31 +57,35 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import com.livewall.app.data.CustomWallpaperManager
 import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.model.WallpaperItem
 import com.livewall.app.service.LiveWallpaperService
+import com.livewall.app.ui.components.CollectionBannerCard
 import com.livewall.app.ui.components.TriggerSelector
-import com.livewall.app.ui.components.WallpaperCard
 import com.livewall.app.ui.theme.LiveWallThemeState
 import com.livewall.app.ui.theme.ShapeCard
-import com.livewall.app.ui.theme.ShapeChip
 import com.livewall.app.ui.theme.ShapePill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+data class CollectionItem(
+    val id: String,
+    val name: String,
+    val subtitle: String,
+    val coverUri: String,
+    val items: List<WallpaperItem>
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -110,23 +98,55 @@ fun HomeScreen(
 
     var activeWallpaperId by remember { mutableStateOf(prefs.selectedWallpaperId) }
     var activeTrigger by remember { mutableStateOf(prefs.trigger) }
-    var selectedCategory by remember { mutableStateOf("All") }
     var previewWallpaper by remember { mutableStateOf<WallpaperItem?>(null) }
+    var selectedCollection by remember { mutableStateOf<CollectionItem?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
 
-    val customWallpapers = remember { mutableStateListOf<WallpaperItem>().apply { addAll(prefs.getCustomWallpapers()) } }
+    val customWallpapers = remember {
+        mutableStateListOf<WallpaperItem>().apply { addAll(prefs.getCustomWallpapers()) }
+    }
 
     val allWallpapers = remember(customWallpapers.size) {
         WallpaperItem.BUNDLED_WALLPAPERS + customWallpapers
     }
 
-    val filteredWallpapers = remember(selectedCategory, allWallpapers) {
-        if (selectedCategory == "All") allWallpapers else allWallpapers.filter { it.collection == selectedCategory }
-    }
-
     val activeWallpaper = remember(activeWallpaperId, allWallpapers) {
         allWallpapers.find { it.id == activeWallpaperId } ?: WallpaperItem.DEFAULT_WALLPAPER
+    }
+
+    // Collections grouped per user request: Banner cards with their respective name (e.g. "ColorOS", "Xiaomi 18 Pro Max")
+    val collections = remember(allWallpapers) {
+        listOf(
+            CollectionItem(
+                id = "coloros",
+                name = "ColorOS",
+                subtitle = "Fluid Silk Wave Flow Animation",
+                coverUri = "file:///android_asset/thumbnails/ColorOS/ColorOS17.webp",
+                items = allWallpapers.filter { it.collection == "ColorOS" }
+            ),
+            CollectionItem(
+                id = "xiaomi_18_pro_max",
+                name = "Xiaomi 18 Pro Max",
+                subtitle = "5 Geometric Refraction Super Wallpapers",
+                coverUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro-Max/wallpaper_WH.webp",
+                items = allWallpapers.filter { it.collection == "Xiaomi 18 Pro Max" }
+            ),
+            CollectionItem(
+                id = "xiaomi_18_pro",
+                name = "Xiaomi 18 Pro",
+                subtitle = "5 Dynamic Light Flare Super Wallpapers",
+                coverUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro/Light01.webp",
+                items = allWallpapers.filter { it.collection == "Xiaomi 18 Pro" }
+            ),
+            CollectionItem(
+                id = "custom",
+                name = "Custom Videos",
+                subtitle = if (customWallpapers.isEmpty()) "Import your own MP4 videos" else "${customWallpapers.size} custom video wallpapers",
+                coverUri = if (customWallpapers.isNotEmpty()) customWallpapers[0].thumbnailUri else "file:///android_asset/thumbnails/ColorOS/ColorOS17.webp",
+                items = customWallpapers
+            )
+        )
     }
 
     // Video picker launcher for importing custom MP4 videos
@@ -212,7 +232,7 @@ fun HomeScreen(
             )
         },
         bottomBar = {
-            // M3 Expressive Floating Toolbar per guidelines §7.1
+            // Floating Toolbar per guidelines §7.1
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -222,15 +242,14 @@ fun HomeScreen(
                 Surface(
                     shape = ShapePill,
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shadowElevation = 6.dp,
-                    tonalElevation = 2.dp
+                    shadowElevation = 8.dp,
+                    tonalElevation = 3.dp
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Import Video Button
                         FilledTonalButton(
                             onClick = {
                                 pickVideoLauncher.launch(
@@ -245,7 +264,6 @@ fun HomeScreen(
                             Text("Import Video", fontWeight = FontWeight.SemiBold)
                         }
 
-                        // Apply Active Wallpaper button
                         Button(
                             onClick = { applyLiveWallpaper(activeWallpaper) },
                             shape = ShapePill,
@@ -264,30 +282,28 @@ fun HomeScreen(
             }
         }
     ) { innerPadding ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+        // Clean, uncluttered Home layout with Collections Banner Cards
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp),
             contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
                 top = innerPadding.calculateTopPadding() + 8.dp,
-                bottom = innerPadding.calculateBottomPadding() + 80.dp
+                bottom = innerPadding.calculateBottomPadding() + 88.dp
             ),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Hero Card: Currently Active Wallpaper
-            item(span = { GridItemSpan(2) }) {
+            // Active Wallpaper Showcase
+            item {
                 HeroWallpaperCard(
                     wallpaper = activeWallpaper,
                     trigger = activeTrigger,
-                    onPreviewClick = { previewWallpaper = activeWallpaper },
-                    onApplyClick = { applyLiveWallpaper(activeWallpaper) }
+                    onPreviewClick = { previewWallpaper = activeWallpaper }
                 )
             }
 
             // Quick Playback Trigger Selector
-            item(span = { GridItemSpan(2) }) {
+            item {
                 TriggerSelector(
                     selectedTrigger = activeTrigger,
                     onTriggerSelected = { newTrigger ->
@@ -297,49 +313,55 @@ fun HomeScreen(
                 )
             }
 
-            // Category Filter Row
-            item(span = { GridItemSpan(2) }) {
-                CategoryChipsRow(
-                    categories = listOf("All", "Xiaomi 18 Pro Max", "Xiaomi 18 Pro", "ColorOS", "Custom"),
-                    selectedCategory = selectedCategory,
-                    onSelect = { selectedCategory = it }
-                )
-            }
-
-            // Section Header
-            item(span = { GridItemSpan(2) }) {
+            // Section Header: Collections
+            item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 4.dp),
+                        .padding(top = 8.dp, bottom = 2.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (selectedCategory == "All") "Available Super Wallpapers" else selectedCategory,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = "Collections",
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "${filteredWallpapers.size} videos",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "${collections.size} Categories",
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // Wallpaper Cards
-            items(filteredWallpapers, key = { it.id }) { item ->
-                WallpaperCard(
-                    wallpaper = item,
-                    isSelected = item.id == activeWallpaperId,
-                    onClick = {
-                        previewWallpaper = item
-                    }
+            // Stacked Collection Banner Cards (e.g. "ColorOS", "Xiaomi 18 Pro Max", etc.)
+            items(collections.size, key = { collections[it].id }) { index ->
+                val col = collections[index]
+                CollectionBannerCard(
+                    collectionName = col.name,
+                    subtitle = col.subtitle,
+                    coverImageUri = col.coverUri,
+                    wallpaperCount = col.items.size,
+                    containsActive = col.items.any { it.id == activeWallpaperId },
+                    onClick = { selectedCollection = col }
                 )
             }
         }
+    }
+
+    // Modal Collection Sheet: Displays wallpapers for the tapped collection banner
+    selectedCollection?.let { col ->
+        CollectionSheet(
+            collectionName = col.name,
+            wallpapers = col.items,
+            activeWallpaperId = activeWallpaperId,
+            onDismiss = { selectedCollection = null },
+            onWallpaperSelected = { item ->
+                previewWallpaper = item
+            }
+        )
     }
 
     // Modal Preview Bottom Sheet
@@ -352,6 +374,7 @@ fun HomeScreen(
                 activeWallpaperId = item.id
                 activeTrigger = prefs.trigger
                 previewWallpaper = null
+                selectedCollection = null
             }
         )
     }
@@ -398,8 +421,7 @@ fun HomeScreen(
 private fun HeroWallpaperCard(
     wallpaper: WallpaperItem,
     trigger: PlaybackTrigger,
-    onPreviewClick: () -> Unit,
-    onApplyClick: () -> Unit
+    onPreviewClick: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -413,7 +435,7 @@ private fun HeroWallpaperCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
+                .height(180.dp)
         ) {
             // Background image with dark gradient
             AsyncImage(
@@ -431,7 +453,7 @@ private fun HeroWallpaperCard(
                             colors = listOf(
                                 Color.Black.copy(alpha = 0.85f),
                                 Color.Black.copy(alpha = 0.55f),
-                                Color.Black.copy(alpha = 0.35f)
+                                Color.Black.copy(alpha = 0.30f)
                             )
                         )
                     )
@@ -441,7 +463,7 @@ private fun HeroWallpaperCard(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
+                    .padding(18.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 // Top Badges
@@ -509,7 +531,7 @@ private fun HeroWallpaperCard(
                         Text(
                             text = "${wallpaper.collection} • ${wallpaper.durationSec}s animation",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f)
+                            color = Color.White.copy(alpha = 0.85f)
                         )
                     }
 
@@ -526,50 +548,6 @@ private fun HeroWallpaperCard(
                         Text("Preview", fontWeight = FontWeight.SemiBold)
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CategoryChipsRow(
-    categories: List<String>,
-    selectedCategory: String,
-    onSelect: (String) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        categories.forEach { cat ->
-            val isSelected = cat == selectedCategory
-            val bgColor by animateColorAsState(
-                targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                animationSpec = spring(),
-                label = "chipBg"
-            )
-            val textColor by animateColorAsState(
-                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = spring(),
-                label = "chipText"
-            )
-
-            Surface(
-                shape = ShapePill,
-                color = bgColor,
-                modifier = Modifier
-                    .clip(ShapePill)
-                    .clickable { onSelect(cat) }
-            ) {
-                Text(
-                    text = cat,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = textColor,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                )
             }
         }
     }
