@@ -38,7 +38,7 @@ fun VideoPlayerView(
     val exoPlayer = remember(videoUri) {
         ExoPlayer.Builder(context).build().apply {
             this.repeatMode = repeatMode
-            this.volume = if (isMuted) 0f else 1f
+            this.volume = 0f
             this.videoScalingMode = if (scalingMode == ScalingMode.CROP) {
                 C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
             } else {
@@ -65,10 +65,6 @@ fun VideoPlayerView(
         } else {
             exoPlayer.pause()
         }
-    }
-
-    LaunchedEffect(isMuted) {
-        exoPlayer.volume = if (isMuted) 0f else 1f
     }
 
     LaunchedEffect(scalingMode) {

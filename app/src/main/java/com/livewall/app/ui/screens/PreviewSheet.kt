@@ -27,8 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.automirrored.rounded.VolumeMute
-import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Palette
@@ -87,7 +85,6 @@ fun PreviewSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var playerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
-    var isMuted by remember { mutableStateOf(prefs.isMuted) }
     var currentTrigger by remember { mutableStateOf(prefs.trigger) }
 
     val initialIndex = remember(initialWallpaper.id, wallpapers) {
@@ -124,7 +121,7 @@ fun PreviewSheet(
                         VideoPlayerView(
                             videoUri = item.videoUri,
                             scalingMode = ScalingMode.CROP,
-                            isMuted = isMuted,
+                            isMuted = true,
                             autoPlay = true,
                             onPlayerReady = { playerInstance = it },
                             modifier = Modifier.fillMaxSize()
@@ -314,26 +311,6 @@ fun PreviewSheet(
                             Icon(imageVector = Icons.Rounded.Replay, contentDescription = "Replay", modifier = Modifier.size(20.dp))
                         }
                     }
-
-                    // Mute Button
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.60f),
-                        contentColor = Color.White,
-                        shadowElevation = 6.dp,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .clickable { isMuted = !isMuted }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isMuted) Icons.AutoMirrored.Rounded.VolumeMute else Icons.AutoMirrored.Rounded.VolumeUp,
-                                contentDescription = "Toggle Mute",
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
                 }
             }
 
@@ -374,7 +351,6 @@ fun PreviewSheet(
                         onClick = {
                             prefs.selectWallpaper(currentWallpaper)
                             prefs.trigger = currentTrigger
-                            prefs.isMuted = isMuted
 
                             // Sync static frame for Samsung One UI Color Palette daemon
                             scope.launch(Dispatchers.IO) {

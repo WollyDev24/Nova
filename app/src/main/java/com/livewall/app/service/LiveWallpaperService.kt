@@ -75,7 +75,7 @@ open class LiveWallpaperService : WallpaperService() {
                 player?.release()
                 player = ExoPlayer.Builder(applicationContext).build().apply {
                     repeatMode = Player.REPEAT_MODE_OFF
-                    volume = if (prefs.isMuted) 0f else 1f
+                    volume = 0f // Wallpapers are completely silent by design
                     videoScalingMode = if (prefs.scalingMode == ScalingMode.CROP) {
                         C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
                     } else {
@@ -241,9 +241,6 @@ open class LiveWallpaperService : WallpaperService() {
                     hasPlayedThisSession = false
                     loadCurrentWallpaper()
                     replayVideo()
-                }
-                WallpaperPreferences.KEY_MUTED -> {
-                    player?.volume = if (prefs.isMuted) 0f else 1f
                 }
                 WallpaperPreferences.KEY_SCALING -> {
                     player?.videoScalingMode = if (prefs.scalingMode == ScalingMode.CROP) {

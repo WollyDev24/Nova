@@ -14,14 +14,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.VolumeMute
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.VolumeMute
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -65,7 +63,6 @@ fun SettingsSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var trigger by remember { mutableStateOf(prefs.trigger) }
     var scaling by remember { mutableStateOf(prefs.scalingMode) }
-    var isMuted by remember { mutableStateOf(prefs.isMuted) }
     var replayOnHome by remember { mutableStateOf(prefs.replayOnHomeReturn) }
 
     ModalBottomSheet(
@@ -189,23 +186,9 @@ fun SettingsSheet(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Behavior & Audio",
+                        text = "Playback Behavior",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Mute Toggle
-                    SettingToggleRow(
-                        icon = Icons.AutoMirrored.Rounded.VolumeMute,
-                        title = "Mute Wallpaper Sound",
-                        subtitle = "Keeps live wallpaper completely silent for comfort",
-                        checked = isMuted,
-                        onCheckedChange = {
-                            isMuted = it
-                            prefs.isMuted = it
-                        }
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
