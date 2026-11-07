@@ -22,7 +22,7 @@ import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
 
-class LiveWallpaperService : WallpaperService() {
+open class LiveWallpaperService : WallpaperService() {
 
     override fun onCreateEngine(): Engine {
         return VideoWallpaperEngine()

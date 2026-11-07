@@ -299,10 +299,11 @@ fun PreviewSheet(
                         }
 
                         try {
+                            val serviceClass = WallpaperColorHelper.getServiceClassForWallpaper(wallpaper.id)
                             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                                 putExtra(
                                     WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                                    ComponentName(context, LiveWallpaperService::class.java)
+                                    ComponentName(context, serviceClass)
                                 )
                             }
                             context.startActivity(intent)

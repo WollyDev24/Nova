@@ -281,4 +281,26 @@ object WallpaperColorHelper {
             }
         }
     }
+
+    /**
+     * Maps each wallpaper to its dedicated LiveWallpaperService component.
+     * Each dedicated service points to its own authentic cover thumbnail in AndroidManifest.xml,
+     * ensuring Samsung One UI displays the real wallpaper preview and extracts the true Color Palette!
+     */
+    fun getServiceClassForWallpaper(wallpaperId: String): Class<out LiveWallpaperService> {
+        return when (wallpaperId) {
+            "coloros_17" -> ColorOSWallpaperService::class.java
+            "xiaomi_18_pro_light01" -> XiaomiLight01WallpaperService::class.java
+            "xiaomi_18_pro_light02" -> XiaomiLight02WallpaperService::class.java
+            "xiaomi_18_pro_light03" -> XiaomiLight03WallpaperService::class.java
+            "xiaomi_18_pro_light04" -> XiaomiLight04WallpaperService::class.java
+            "xiaomi_18_pro_light05" -> XiaomiLight05WallpaperService::class.java
+            "xiaomi_18_pro_max_wh"  -> XiaomiWHWallpaperService::class.java
+            "xiaomi_18_pro_max_bk"  -> XiaomiBKWallpaperService::class.java
+            "xiaomi_18_pro_max_cy"  -> XiaomiCYWallpaperService::class.java
+            "xiaomi_18_pro_max_db"  -> XiaomiDBWallpaperService::class.java
+            "xiaomi_18_pro_max_pk"  -> XiaomiPKWallpaperService::class.java
+            else -> LiveWallpaperService::class.java
+        }
+    }
 }
