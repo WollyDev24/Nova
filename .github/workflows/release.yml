@@ -136,6 +136,22 @@ jobs:
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "Building Nova $VER_NAME ($VER_CODE) [Tag: $TAG_NAME]"
 
+          # Resolve custom changelog from changelogs/ by version code or tag
+          CHANGELOG_PATH=""
+          for candidate in "changelogs/${VER_CODE}.md" "changelogs/$((VER_CODE - 1000)).md" "changelogs/${VER_NAME}.md" "changelogs/${TAG_NAME}.md"; do
+            if [ -f "$candidate" ]; then
+              CHANGELOG_PATH="$candidate"
+              break
+            fi
+          done
+
+          if [ -n "$CHANGELOG_PATH" ]; then
+            echo "Found custom changelog at: $CHANGELOG_PATH"
+            echo "changelog_path=$CHANGELOG_PATH" >> "$GITHUB_OUTPUT"
+          else
+            echo "No custom changelog found in changelogs/, using default template."
+          fi
+
       - name: Build Release APK
         run: |
           ./gradlew assembleRelease \
@@ -162,6 +178,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
           name: "Nova ${{ steps.version.outputs.tag_name }}"
+          body_path: ${{ steps.version.outputs.changelog_path }}
           body: |
             ${{ github.event.inputs.release_notes || '' }}
             
@@ -172,7 +189,7 @@ jobs:
           files: ${{ steps.artifacts.outputs.apk_path }}
           prerelease: ${{ github.event.inputs.prerelease || false }}
           draft: false
-          generate_release_notes: true
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
