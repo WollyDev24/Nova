@@ -30,5 +30,8 @@ render.experimental.xml
 *.jks
 *.keystore
 
+# Google Services (Firebase configuration)
+google-services.json
+
 # Android Profiling
 *.hprof
