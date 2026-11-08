@@ -3,9 +3,6 @@
 # Nova ✨
 
 **HyperOS & ColorOS OEM Super Wallpapers for Android**
-
-<img src="assets/icon.png" alt="App Icon" width="128" style="border-radius: 28px;"/>
-
 [![Stars](https://m3-markdown-badges.vercel.app/stars/6/2/WollyDev24/Nova)](https://github.com/WollyDev24/Nova)
 [![Issues](https://m3-markdown-badges.vercel.app/issues/1/2/WollyDev24/Nova)](https://github.com/WollyDev24/Nova/issues)
 [![License](https://ziadoua.github.io/m3-Markdown-Badges/badges/Apache/apache2.svg)](LICENSE)
