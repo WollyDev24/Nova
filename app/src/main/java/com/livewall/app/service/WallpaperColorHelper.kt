@@ -273,30 +273,16 @@ object WallpaperColorHelper {
     }
 
     /**
-     * Writes the vibrant backdrop bitmap to WallpaperManager.
-     * On Samsung One UI, this triggers Samsung's Wallpaper & Style daemon to immediately
-     * generate matching Color Palette swatches for the current wallpaper!
+     * Samsung One UI and Android Material You Color Palette integration.
+     * Dynamic palette extraction is handled natively and non-destructively via
+     * [LiveWallpaperService.onComputeColors] and [LiveWallpaperService.notifyColorsChanged].
+     *
+     * Note: We NEVER call WallpaperManager.setBitmap() here, as doing so tells Android
+     * to displace and unbind the active Live Wallpaper service with a static bitmap.
      */
     fun syncStaticBitmapForSamsungOneUI(context: Context, wallpaper: WallpaperItem): Boolean {
-        return try {
-            val backdrop = generateVibrantBackdropBitmap(context, wallpaper)
-            val wm = WallpaperManager.getInstance(context)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                try {
-                    wm.setBitmap(backdrop, null, false, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
-                } catch (_: Exception) {
-                    wm.setBitmap(backdrop, null, false, WallpaperManager.FLAG_SYSTEM)
-                }
-            } else {
-                wm.setBitmap(backdrop)
-            }
-            backdrop.recycle()
-            Log.d(TAG, "Successfully synced vibrant backdrop bitmap for Samsung One UI Color Palette")
-            true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to sync static bitmap for Samsung One UI", e)
-            false
-        }
+        Log.d(TAG, "Preserving LiveWallpaperService; dynamic palette is notified via notifyColorsChanged()")
+        return true
     }
 
     /**

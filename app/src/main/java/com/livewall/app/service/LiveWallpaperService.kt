@@ -19,6 +19,7 @@ import android.view.SurfaceHolder
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -26,6 +27,7 @@ import androidx.media3.exoplayer.SeekParameters
 import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
+import com.livewall.app.model.WallpaperItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,10 +85,14 @@ open class LiveWallpaperService : WallpaperService() {
                 addAction(Intent.ACTION_SCREEN_OFF)
                 addAction(Intent.ACTION_USER_PRESENT)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(screenReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                registerReceiver(screenReceiver, filter)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                } else {
+                    registerReceiver(screenReceiver, filter)
+                }
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to register screenReceiver", e)
             }
         }
 
@@ -118,6 +124,22 @@ open class LiveWallpaperService : WallpaperService() {
                                 Log.d(tag, "Forward video completed, paused at final frame.")
                             }
                         }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            Log.e(tag, "Forward player error, attempting recovery", error)
+                            try {
+                                loadCurrentWallpaper()
+                                val surface = currentSurfaceHolder?.surface
+                                if (surface != null && surface.isValid) {
+                                    forwardPlayer?.setVideoSurface(surface)
+                                    if (isScreenVisible) {
+                                        replayVideo()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e(tag, "Failed recovering forward player", e)
+                            }
+                        }
                     })
                 }
 
@@ -135,6 +157,10 @@ open class LiveWallpaperService : WallpaperService() {
                                 }
                             }
                         }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            Log.e(tag, "Reverse player error", error)
+                        }
                     })
                 }
 
@@ -146,7 +172,11 @@ open class LiveWallpaperService : WallpaperService() {
 
         private fun loadCurrentWallpaper() {
             val fp = forwardPlayer ?: return
-            val uriStr = prefs.selectedWallpaperUri
+            var uriStr = prefs.selectedWallpaperUri
+            if (uriStr.isBlank()) {
+                uriStr = WallpaperItem.DEFAULT_WALLPAPER.videoUri
+                prefs.selectedWallpaperUri = uriStr
+            }
             try {
                 val forwardItem = MediaItem.fromUri(Uri.parse(uriStr))
                 fp.setMediaItem(forwardItem)
@@ -165,7 +195,14 @@ open class LiveWallpaperService : WallpaperService() {
                 }
                 updateWallpaperColors()
             } catch (e: Exception) {
-                Log.e(tag, "Error loading media item: $uriStr", e)
+                Log.e(tag, "Error loading media item: $uriStr, attempting default wallpaper fallback", e)
+                try {
+                    val fallbackUri = WallpaperItem.DEFAULT_WALLPAPER.videoUri
+                    fp.setMediaItem(MediaItem.fromUri(Uri.parse(fallbackUri)))
+                    fp.prepare()
+                } catch (e2: Exception) {
+                    Log.e(tag, "Critical failure during wallpaper load fallback", e2)
+                }
             }
         }
 
@@ -198,11 +235,16 @@ open class LiveWallpaperService : WallpaperService() {
             updateWallpaperColors()
             if (isPreview) {
                 replayVideo()
-            } else if (!hasPlayedThisSession && isScreenVisible) {
+            } else if (isScreenVisible) {
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
                 if (!isLocked || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
-                    hasPlayedThisSession = true
-                    replayVideo()
+                    if (!hasPlayedThisSession || prefs.replayOnHomeReturn) {
+                        if (replayVideo()) {
+                            hasPlayedThisSession = true
+                        }
+                    } else if (forwardPlayer?.playbackState != Player.STATE_ENDED) {
+                        forwardPlayer?.play()
+                    }
                 }
             }
         }
@@ -250,8 +292,9 @@ open class LiveWallpaperService : WallpaperService() {
                         }
                     }
                 } else {
-                    hasPlayedThisSession = true
-                    replayVideo()
+                    if (replayVideo()) {
+                        hasPlayedThisSession = true
+                    }
                 }
             } else {
                 if (!isReversing) {
@@ -466,8 +509,9 @@ open class LiveWallpaperService : WallpaperService() {
             when (prefs.trigger) {
                 PlaybackTrigger.SCREEN_ON -> {
                     if (!hasPlayedThisSession) {
-                        hasPlayedThisSession = true
-                        replayVideo()
+                        if (replayVideo()) {
+                            hasPlayedThisSession = true
+                        }
                     }
                 }
                 PlaybackTrigger.SCREEN_UNLOCK -> {
@@ -486,8 +530,9 @@ open class LiveWallpaperService : WallpaperService() {
             // Fired whenever the device is unlocked!
             if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
                 if (!hasPlayedThisSession) {
-                    hasPlayedThisSession = true
-                    replayVideo()
+                    if (replayVideo()) {
+                        hasPlayedThisSession = true
+                    }
                 }
             }
         }
@@ -505,19 +550,22 @@ open class LiveWallpaperService : WallpaperService() {
             }
         }
 
-        private fun replayVideo() {
+        private fun replayVideo(): Boolean {
             val surface = currentSurfaceHolder?.surface
-            val fp = forwardPlayer
+            val fp = forwardPlayer ?: return false
             val rp = reversePlayer
             if (rp != null) {
                 rp.pause()
                 rp.clearVideoSurface()
             }
-            if (fp != null && surface != null && surface.isValid) {
+            if (surface != null && surface.isValid) {
                 fp.setVideoSurface(surface)
                 fp.seekTo(0)
                 fp.play()
+                return true
             }
+            Log.d(tag, "replayVideo deferred: surface is not yet valid")
+            return false
         }
 
         @OptIn(UnstableApi::class)
