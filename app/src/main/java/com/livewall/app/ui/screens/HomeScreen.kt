@@ -24,9 +24,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
@@ -44,13 +47,12 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import com.livewall.app.ui.components.FloatingNavigationBar
+import com.livewall.app.ui.components.NavDestination
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -111,6 +113,21 @@ fun HomeScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val communityRepo = remember { CommunityRepository(context) }
+
+    val navDestinations = remember {
+        listOf(
+            NavDestination(
+                label = "Wallpapers",
+                selectedIcon = Icons.Rounded.Wallpaper,
+                unselectedIcon = Icons.Outlined.Wallpaper
+            ),
+            NavDestination(
+                label = "Community",
+                selectedIcon = Icons.Rounded.Explore,
+                unselectedIcon = Icons.Outlined.Explore
+            )
+        )
+    }
 
     var currentTab by remember { mutableStateOf(MainNavTab.CURATED) }
     var showUploadSheet by remember { mutableStateOf(false) }
@@ -248,140 +265,70 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
-                TopAppBar(
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "LiveWall",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = ShapePill,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ) {
                             Text(
-                                text = "LiveWall",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Black
+                                text = if (currentTab == MainNavTab.CURATED) "Super Wallpapers" else "Community Hub",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                shape = ShapePill,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            ) {
-                                Text(
-                                    text = if (currentTab == MainNavTab.CURATED) "Super Wallpapers" else "Community Hub",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
                         }
-                    },
-                    actions = {
+                    }
+                },
+                actions = {
+                    if (currentTab == MainNavTab.CURATED) {
                         FilledTonalIconButton(
-                            onClick = { showSettings = true },
+                            onClick = {
+                                pickVideoLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                                )
+                            },
                             shape = CircleShape
                         ) {
-                            Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
+                            Icon(imageVector = Icons.Rounded.Add, contentDescription = "Import Video")
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-
-                // Expressive Segmented Tabs between Curated OEM & Community Hub
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 8.dp)
-                ) {
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = currentTab == MainNavTab.CURATED,
-                            onClick = { currentTab = MainNavTab.CURATED },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                    } else {
+                        FilledTonalIconButton(
+                            onClick = { showUploadSheet = true },
+                            shape = CircleShape
                         ) {
-                            Text(
-                                "Curated OEM",
-                                fontWeight = if (currentTab == MainNavTab.CURATED) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
-                        SegmentedButton(
-                            selected = currentTab == MainNavTab.COMMUNITY,
-                            onClick = { currentTab = MainNavTab.COMMUNITY },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) {
-                            Text(
-                                "Community Hub",
-                                fontWeight = if (currentTab == MainNavTab.COMMUNITY) FontWeight.Bold else FontWeight.Medium
-                            )
+                            Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = "Publish to Community")
                         }
                     }
-                }
-            }
+
+                    FilledTonalIconButton(
+                        onClick = { showSettings = true },
+                        shape = CircleShape
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
         },
         bottomBar = {
-            // Floating Toolbar per guidelines §7.1
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = ShapePill,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    shadowElevation = 8.dp,
-                    tonalElevation = 3.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (currentTab == MainNavTab.CURATED) {
-                            FilledTonalButton(
-                                onClick = {
-                                    pickVideoLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-                                    )
-                                },
-                                shape = ShapePill,
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-                            ) {
-                                Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Import Video", fontWeight = FontWeight.SemiBold)
-                            }
-
-                            Button(
-                                onClick = { applyLiveWallpaper(activeWallpaper) },
-                                shape = ShapePill,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ),
-                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
-                            ) {
-                                Icon(imageVector = Icons.Rounded.Wallpaper, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Set Live Wallpaper", fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            Button(
-                                onClick = { showUploadSheet = true },
-                                shape = ShapePill,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ),
-                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
-                            ) {
-                                Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Publish to Community", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
+            FloatingNavigationBar(
+                destinations = navDestinations,
+                currentTab = currentTab.ordinal,
+                onSelect = { index ->
+                    currentTab = MainNavTab.entries[index]
                 }
-            }
+            )
         }
     ) { innerPadding ->
         if (currentTab == MainNavTab.CURATED) {
@@ -392,7 +339,7 @@ fun HomeScreen(
                     .padding(horizontal = 20.dp),
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 8.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 88.dp
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -451,7 +398,7 @@ fun HomeScreen(
                 onOpenUpload = { showUploadSheet = true },
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 8.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 88.dp
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp
                 )
             )
         }
