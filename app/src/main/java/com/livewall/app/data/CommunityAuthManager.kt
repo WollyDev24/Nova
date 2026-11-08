@@ -197,15 +197,11 @@ class CommunityAuthManager(
 
     /**
      * Checks if the current user is an authorized administrator / moderator.
-     * Evaluates verified Google email against developer admin whitelist or local moderator override.
+     * Evaluates verified Google email against developer admin whitelist.
      */
-    fun isCurrentUserAdmin(context: Context): Boolean {
+    fun isCurrentUserAdmin(context: Context? = null): Boolean {
         val email = currentUser?.email
-        if (!email.isNullOrBlank() && ADMIN_EMAILS.any { it.equals(email.trim(), ignoreCase = true) }) {
-            return true
-        }
-        val prefs = WallpaperPreferences(context)
-        return prefs.isModeratorModeEnabled
+        return !email.isNullOrBlank() && ADMIN_EMAILS.any { it.equals(email.trim(), ignoreCase = true) }
     }
 
     companion object {
@@ -214,7 +210,6 @@ class CommunityAuthManager(
             "wollywoll8844@gmail.com",
             "balthasar.gasmann@gmail.com"
         )
-        const val MODERATOR_PIN = "2408"
     }
 
     /**

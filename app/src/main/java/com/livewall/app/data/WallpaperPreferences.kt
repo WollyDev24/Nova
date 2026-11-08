@@ -77,10 +77,6 @@ class WallpaperPreferences(private val context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, value).apply()
 
-    var isModeratorModeEnabled: Boolean
-        get() = prefs.getBoolean(KEY_MODERATOR_MODE, false)
-        set(value) = prefs.edit().putBoolean(KEY_MODERATOR_MODE, value).apply()
-
     fun selectWallpaper(item: WallpaperItem) {
         prefs.edit()
             .putString(KEY_SELECTED_ID, item.id)
@@ -167,6 +163,5 @@ class WallpaperPreferences(private val context: Context) {
         const val KEY_CUSTOM_DISPLAY_NAME = "custom_display_name"
         const val KEY_CUSTOM_PHOTO_URL = "custom_photo_url"
         const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
-        const val KEY_MODERATOR_MODE = "moderator_mode_enabled"
     }
 }

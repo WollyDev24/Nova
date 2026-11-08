@@ -192,7 +192,7 @@ fun HomeScreen(
     var showUpdateDialog by remember { mutableStateOf(false) }
 
     val pendingSubmissionsCount by communityRepo.getPendingCountFlow().collectAsState(initial = 0)
-    val isCurrentUserAdmin = remember(currentUser, prefs.isModeratorModeEnabled) {
+    val isCurrentUserAdmin = remember(currentUser) {
         communityRepo.authManager.isCurrentUserAdmin(context)
     }
 
@@ -451,7 +451,7 @@ fun HomeScreen(
                                 Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = "Publish to Community", modifier = Modifier.size(19.dp))
                             }
                             Spacer(modifier = Modifier.width(4.dp))
-                            if (isCurrentUserAdmin || pendingSubmissionsCount > 0) {
+                            if (isCurrentUserAdmin) {
                                 FilledTonalIconButton(
                                     onClick = { showManagementConsole = true },
                                     shape = CircleShape,
@@ -711,6 +711,7 @@ fun HomeScreen(
                 showSettings = false
                 activeTrigger = prefs.trigger
             },
+            isAdmin = isCurrentUserAdmin,
             onOpenManagementConsole = {
                 showManagementConsole = true
             }

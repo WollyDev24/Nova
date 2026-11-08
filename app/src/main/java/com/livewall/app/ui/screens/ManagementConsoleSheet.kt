@@ -79,9 +79,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -93,7 +90,6 @@ import coil3.request.crossfade
 import com.livewall.app.data.CommunityAuthManager
 import com.livewall.app.data.CommunityRepository
 import com.livewall.app.data.ScalingMode
-import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.model.CommunityWallpaper
 import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.components.VideoPlayerView
@@ -122,13 +118,10 @@ fun ManagementConsoleSheet(
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val prefs = remember { WallpaperPreferences(context) }
 
-    var isAdminUnlocked by remember {
-        mutableStateOf(repository.authManager.isCurrentUserAdmin(context))
+    val isAdminUnlocked = remember {
+        repository.authManager.isCurrentUserAdmin(context)
     }
-    var pinInput by remember { mutableStateOf("") }
-    var pinError by remember { mutableStateOf(false) }
 
     var wallpapers by remember { mutableStateOf<List<CommunityWallpaper>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -318,11 +311,11 @@ fun ManagementConsoleSheet(
             }
 
             if (!isAdminUnlocked) {
-                // PIN Unlock Screen
+                // Restricted Admin Access Screen
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 28.dp, vertical = 32.dp),
+                        .padding(horizontal = 28.dp, vertical = 36.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Surface(
@@ -334,71 +327,31 @@ fun ManagementConsoleSheet(
                             Icon(
                                 imageVector = Icons.Rounded.Lock,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(32.dp)
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Moderator Access",
+                        text = "Admin Access Required",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Sign in with a verified admin Google account, or enter the moderator PIN to unlock the content console.",
+                        text = "Nova Studio is restricted to authorized administrators. Please sign in with an authorized Google administrator account to manage community content.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-
-                    OutlinedTextField(
-                        value = pinInput,
-                        onValueChange = {
-                            pinInput = it
-                            pinError = false
-                        },
-                        label = { Text("Moderator PIN") },
-                        singleLine = true,
-                        isError = pinError,
-                        supportingText = if (pinError) {
-                            { Text("Invalid PIN. Try again.", color = MaterialTheme.colorScheme.error) }
-                        } else null,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.NumberPassword,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (pinInput.trim() == CommunityAuthManager.MODERATOR_PIN) {
-                                    prefs.isModeratorModeEnabled = true
-                                    isAdminUnlocked = true
-                                } else {
-                                    pinError = true
-                                }
-                            }
-                        ),
-                        visualTransformation = PasswordVisualTransformation(),
-                        shape = ShapeCard,
-                        modifier = Modifier.fillMaxWidth(0.7f)
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
                     Button(
-                        onClick = {
-                            if (pinInput.trim() == CommunityAuthManager.MODERATOR_PIN) {
-                                prefs.isModeratorModeEnabled = true
-                                isAdminUnlocked = true
-                            } else {
-                                pinError = true
-                            }
-                        },
+                        onClick = onDismiss,
                         shape = ShapePill,
-                        modifier = Modifier.fillMaxWidth(0.7f)
+                        modifier = Modifier.fillMaxWidth(0.6f)
                     ) {
-                        Text("Unlock Console")
+                        Text("Close")
                     }
                 }
             } else {
