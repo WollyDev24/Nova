@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Nova Super Wallpaper Importer & Automation Tool
-Adds new wallpapers locally to readymade collections, generates backwards animations,
-creates system wallpaper picker services, and updates all code registries automatically.
+Adds new wallpapers locally to readymade collections (single file or entire folders),
+generates backwards animations, creates system wallpaper picker services,
+and updates all code registries automatically.
 """
 
 import sys
@@ -36,6 +37,8 @@ HOME_SCREEN_KT = JAVA_DIR / "ui" / "screens" / "HomeScreen.kt"
 SPECIFIC_SERVICES_KT = JAVA_DIR / "service" / "SpecificWallpaperServices.kt"
 COLOR_HELPER_KT = JAVA_DIR / "service" / "WallpaperColorHelper.kt"
 MANIFEST_XML = SRC_DIR / "AndroidManifest.xml"
+
+SUPPORTED_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm"}
 
 
 def run_cmd(cmd, error_msg="Command failed"):
@@ -76,7 +79,6 @@ def get_video_info(video_path: Path):
 def extract_vibrant_colors(image_path: Path):
     try:
         img = Image.open(image_path).convert("RGB")
-        # Sample every 5th pixel for speed and variance
         pixels = list(img.getdata())[::5]
         scored = []
         for r, g, b in pixels:
@@ -130,11 +132,32 @@ def sanitize_filename(text: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_-]', '', text)
 
 
+def clean_title_from_stem(stem: str) -> str:
+    # Remove leading numbering like "01_", "1. "
+    cleaned = re.sub(r'^\d+[\s._-]+', '', stem)
+    # Replace underscores and hyphens with spaces
+    cleaned = re.sub(r'[-_]+', ' ', cleaned)
+    # Insert space between letters and numbers: e.g. Light01 -> Light 01
+    cleaned = re.sub(r'([a-zA-Z])(\d+)', r'\1 \2', cleaned)
+    cleaned = re.sub(r'([a-z])([A-Z])', r'\1 \2', cleaned)
+    return cleaned.strip().title()
+
+
+def find_video_files_in_dir(directory: Path):
+    videos = []
+    for f in sorted(directory.iterdir()):
+        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS:
+            # Skip reverse videos or hidden files
+            if f.stem.endswith("_rev") or f.name.startswith("."):
+                continue
+            videos.append(f)
+    return videos
+
+
 def process_wallpaper(video_file: Path, title: str, description: str, collection_name: str, collection_id: str, is_new_collection: bool, col_subtitle: str):
-    print(f"\n{CYAN}--- Step 1: Analyzing Source Video ---{RESET}")
+    print(f"\n{CYAN}--- Processing: {video_file.name} ('{title}') ---{RESET}")
     width, height, duration = get_video_info(video_file)
-    print(f"  • Resolution: {BOLD}{width}x{height}{RESET}")
-    print(f"  • Duration:   {BOLD}{duration:.2f}s{RESET}")
+    print(f"  • Dimensions: {BOLD}{width}x{height}{RESET} | Duration: {BOLD}{duration:.2f}s{RESET}")
 
     base_name = to_snake_case(title)
     col_folder = sanitize_filename(collection_name.replace(" ", "-"))
@@ -142,7 +165,7 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
 
     wallpaper_id = f"{collection_id}_{base_name}"
     service_class_name = f"{to_pascal_case(collection_id)}{file_prefix}WallpaperService"
-    xml_filename = f"wallpaper_{wallpaper_id}.xml"
+    xml_res_name = f"wallpaper_{wallpaper_id}"
     drawable_thumb_name = f"thumb_{wallpaper_id}.png"
 
     # Destination paths
@@ -160,21 +183,20 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
     dest_thumb_resting = thumb_asset_dir / f"{file_prefix}.webp"
     dest_thumb_start = thumb_start_asset_dir / f"{file_prefix}.webp"
     dest_system_thumb = res_drawable_dir / drawable_thumb_name
-    dest_xml = res_xml_dir / xml_filename
+    dest_xml = res_xml_dir / f"{xml_res_name}.xml"
 
-    # Step 2: FFmpeg Encoding
-    print(f"\n{CYAN}--- Step 2: Encoding High-Efficiency H.265 Video ---{RESET}")
-    print(f"  • Forward video  -> {dest_forward_video.relative_to(REPO_ROOT)}")
+    # 1. Forward Video (H.265)
+    print(f"  • Encoding forward video  -> {dest_forward_video.relative_to(REPO_ROOT)}")
     run_cmd([
         "ffmpeg", "-y", "-i", str(video_file),
         "-c:v", "libx265", "-crf", "24", "-preset", "medium",
         "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1",
         "-an", "-movflags", "+faststart",
         str(dest_forward_video)
-    ], "Failed encoding forward video")
+    ], f"Failed encoding forward video for {video_file.name}")
 
-    print(f"\n{CYAN}--- Step 3: Generating Seamless Backwards Animation ---{RESET}")
-    print(f"  • Reverse video  -> {dest_reverse_video.relative_to(REPO_ROOT)}")
+    # 2. Reverse Video (H.265 reverse filter)
+    print(f"  • Generating backwards video -> {dest_reverse_video.relative_to(REPO_ROOT)}")
     run_cmd([
         "ffmpeg", "-y", "-i", str(video_file),
         "-vf", "reverse",
@@ -182,39 +204,35 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
         "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1",
         "-an", "-movflags", "+faststart",
         str(dest_reverse_video)
-    ], "Failed generating reverse video")
+    ], f"Failed generating reverse video for {video_file.name}")
 
-    print(f"\n{CYAN}--- Step 4: Extracting Start & Resting Frame Thumbnails ---{RESET}")
-    # Resting frame (end of video)
+    # 3. Resting Frame Thumbnail (.webp)
     seek_end = max(0.0, duration - 0.08)
     run_cmd([
         "ffmpeg", "-y", "-ss", f"{seek_end:.2f}", "-i", str(video_file),
         "-vframes", "1", "-c:v", "libwebp", "-quality", "85",
         str(dest_thumb_resting)
-    ], "Failed extracting resting frame thumbnail")
+    ], f"Failed extracting resting thumbnail for {video_file.name}")
 
-    # Start frame (0s)
+    # 4. Start Frame Thumbnail (.webp)
     run_cmd([
         "ffmpeg", "-y", "-ss", "0", "-i", str(video_file),
         "-vframes", "1", "-c:v", "libwebp", "-quality", "85",
         str(dest_thumb_start)
-    ], "Failed extracting start frame thumbnail")
+    ], f"Failed extracting start thumbnail for {video_file.name}")
 
-    # System picker PNG thumbnail (downscaled)
+    # 5. System Wallpaper Picker Thumbnail (.png)
     run_cmd([
         "ffmpeg", "-y", "-ss", f"{seek_end:.2f}", "-i", str(video_file),
         "-vf", "scale=400:-1", "-vframes", "1",
         str(dest_system_thumb)
-    ], "Failed creating system picker PNG thumbnail")
+    ], f"Failed creating system picker thumbnail for {video_file.name}")
 
-    print(f"\n{CYAN}--- Step 5: Analyzing System Palette Accents ---{RESET}")
+    # 6. Vibrant Colors Analysis
     color_p, color_s, color_t = extract_vibrant_colors(dest_thumb_resting)
-    print(f"  • Primary:   {color_p}")
-    print(f"  • Secondary: {color_s}")
-    print(f"  • Tertiary:  {color_t}")
+    print(f"  • Extracted palette: Primary={color_p}, Secondary={color_s}, Tertiary={color_t}")
 
-    print(f"\n{CYAN}--- Step 6: Creating System Wallpaper Picker XML & Services ---{RESET}")
-    # 6a. XML Resource
+    # 7. Create XML Metadata
     xml_content = f"""<?xml version="1.0" encoding="utf-8"?>
 <wallpaper xmlns:android="http://schemas.android.com/apk/res/android"
     android:thumbnail="@drawable/{drawable_thumb_name[:-4]}"
@@ -222,17 +240,16 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
     android:settingsActivity="com.livewall.app.MainActivity" />
 """
     dest_xml.write_text(xml_content, encoding="utf-8")
-    print(f"  • Created XML metadata: {dest_xml.relative_to(REPO_ROOT)}")
 
-    # 6b. SpecificWallpaperServices.kt
+    # 8. Register Service Class in SpecificWallpaperServices.kt
     service_decl = f"class {service_class_name} : LiveWallpaperService()"
     services_text = SPECIFIC_SERVICES_KT.read_text(encoding="utf-8")
     if service_class_name not in services_text:
         services_text = services_text.strip() + f"\n{service_decl}\n"
         SPECIFIC_SERVICES_KT.write_text(services_text, encoding="utf-8")
-        print(f"  • Registered service in SpecificWallpaperServices.kt: {service_class_name}")
+        print(f"  • Registered service class: {service_class_name}")
 
-    # 6c. AndroidManifest.xml
+    # 9. Register Service in AndroidManifest.xml
     manifest_text = MANIFEST_XML.read_text(encoding="utf-8")
     if service_class_name not in manifest_text:
         service_xml_entry = f"""
@@ -243,16 +260,15 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
             android:label="{title}"
             android:permission="android.permission.BIND_WALLPAPER">
             <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
-            <meta-data android:name="android.service.wallpaper" android:resource="@xml/{wallpaper_id}" />
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/{xml_res_name}" />
         </service>
 """
         manifest_text = manifest_text.replace("    </application>", f"{service_xml_entry}\n    </application>")
         MANIFEST_XML.write_text(manifest_text, encoding="utf-8")
-        print(f"  • Added system picker service to AndroidManifest.xml")
+        print(f"  • Added to AndroidManifest.xml: @xml/{xml_res_name}")
 
-    # 6d. WallpaperColorHelper.kt
+    # 10. Update WallpaperColorHelper.kt
     color_helper_text = COLOR_HELPER_KT.read_text(encoding="utf-8")
-    # Add service mapping
     if f'"{wallpaper_id}"' not in color_helper_text:
         service_map_entry = f'            "{wallpaper_id}" -> {service_class_name}::class.java\n'
         color_helper_text = re.sub(
@@ -261,8 +277,6 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
             color_helper_text,
             count=1
         )
-
-        # Add curated colors
         rgb_entry = f'            "{wallpaper_id}" -> Triple({color_p}.toInt(), {color_s}.toInt(), {color_t}.toInt()) // {title}\n'
         color_helper_text = re.sub(
             r'(fun getCuratedRgb[^{]+{\s*return when \(wallpaperId\) {)',
@@ -271,9 +285,9 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
             count=1
         )
         COLOR_HELPER_KT.write_text(color_helper_text, encoding="utf-8")
-        print(f"  • Mapped service class and vibrant colors in WallpaperColorHelper.kt")
+        print(f"  • Mapped service class & palette in WallpaperColorHelper.kt")
 
-    # 6e. WallpaperItem.kt
+    # 11. Add WallpaperItem in WallpaperItem.kt
     item_kt_text = WALLPAPER_ITEM_KT.read_text(encoding="utf-8")
     if f'id = "{wallpaper_id}"' not in item_kt_text:
         new_wallpaper_entry = f"""            WallpaperItem(
@@ -296,7 +310,7 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
         WALLPAPER_ITEM_KT.write_text(item_kt_text, encoding="utf-8")
         print(f"  • Added WallpaperItem entry in WallpaperItem.kt")
 
-    # 6f. If new collection, add to HomeScreen.kt
+    # 12. If new collection, add CollectionItem to HomeScreen.kt once
     if is_new_collection:
         home_screen_text = HOME_SCREEN_KT.read_text(encoding="utf-8")
         if f'id = "{collection_id}"' not in home_screen_text:
@@ -315,44 +329,52 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
                 count=1
             )
             HOME_SCREEN_KT.write_text(home_screen_text, encoding="utf-8")
-            print(f"  • Added new collection banner in HomeScreen.kt")
+            print(f"  • Registered new collection banner in HomeScreen.kt")
 
-    print(f"\n{GREEN}{BOLD}✓ Wallpaper '{title}' successfully added!{RESET}")
-    print(f"  ID:          {BOLD}{wallpaper_id}{RESET}")
-    print(f"  Collection:  {BOLD}{collection_name}{RESET}")
-    print(f"  Service:     {BOLD}{service_class_name}{RESET}")
+    print(f"  {GREEN}✓ Completed: {title} (ID: {wallpaper_id}){RESET}")
+    return wallpaper_id, title
 
 
 def interactive_wizard():
     print(f"\n{BOLD}{CYAN}===================================================={RESET}")
-    print(f"{BOLD}{CYAN}     Nova Super Wallpaper Automated Import Wizard    {RESET}")
+    print(f"{BOLD}{CYAN}    Nova Super Wallpaper Batch & Folder Importer     {RESET}")
     print(f"{BOLD}{CYAN}===================================================={RESET}\n")
 
     check_prerequisites()
 
-    # Video file path
-    while True:
-        video_input = input(f"{BOLD}Enter path to video file (.mp4/.mov): {RESET}").strip()
-        # Handle dragged and dropped file paths with escaped quotes or spaces
-        clean_path = video_input.strip("\"'").replace("\\ ", " ")
-        video_path = Path(clean_path).expanduser().resolve()
-        if video_path.is_file():
+    # Step 1: Input Path (file or folder)
+    target_path = None
+    if len(sys.argv) > 1 and sys.argv[1] not in ["--help", "-h"]:
+        cli_arg = sys.argv[1].strip("\"'").replace("\\ ", " ")
+        p = Path(cli_arg).expanduser().resolve()
+        if p.exists():
+            target_path = p
+
+    while not target_path:
+        user_input = input(f"{BOLD}Enter path to video file or folder with videos: {RESET}").strip()
+        clean_path = user_input.strip("\"'").replace("\\ ", " ")
+        p = Path(clean_path).expanduser().resolve()
+        if p.exists():
+            target_path = p
             break
-        print(f"{RED}File not found: {video_path}. Please try again.{RESET}")
+        print(f"{RED}Path not found: {p}. Please try again.{RESET}")
 
-    default_title = video_path.stem.replace("_", " ").title()
-    title = input(f"{BOLD}Wallpaper Title [{default_title}]: {RESET}").strip()
-    if not title:
-        title = default_title
+    # Determine files to process
+    video_files = []
+    if target_path.is_dir():
+        video_files = find_video_files_in_dir(target_path)
+        if not video_files:
+            print(f"{RED}No supported video files ({', '.join(SUPPORTED_EXTENSIONS)}) found in {target_path}{RESET}")
+            sys.exit(1)
+        print(f"\n{GREEN}Found {len(video_files)} video wallpaper(s) in {target_path.name}:{RESET}")
+        for idx, vf in enumerate(video_files, 1):
+            print(f"  [{idx}] {vf.name}")
+    else:
+        video_files = [target_path]
 
-    default_desc = f"{title} super wallpaper animation."
-    desc = input(f"{BOLD}Description [{default_desc}]: {RESET}").strip()
-    if not desc:
-        desc = default_desc
-
-    # Collections
+    # Step 2: Choose Collection
     existing_cols = get_existing_collections()
-    print(f"\n{BOLD}Choose Collection:{RESET}")
+    print(f"\n{BOLD}Choose Collection for the wallpaper(s):{RESET}")
     for idx, (cid, cname) in enumerate(existing_cols, 1):
         print(f"  [{idx}] {cname}")
     print(f"  [{len(existing_cols) + 1}] {GREEN}+ Create a New Collection{RESET}")
@@ -369,35 +391,78 @@ def interactive_wizard():
         subtitle = ""
     else:
         is_new = True
-        cname = input(f"{BOLD}Enter New Collection Name (e.g. 'HyperOS'): {RESET}").strip()
+        default_cname = target_path.name.replace("_", " ").title() if target_path.is_dir() else "New Collection"
+        cname = input(f"{BOLD}Enter New Collection Name [{default_cname}]: {RESET}").strip()
+        if not cname:
+            cname = default_cname
         cid = to_snake_case(cname)
-        subtitle = input(f"{BOLD}Enter Subtitle (e.g. '5 Fluid Refraction Super Wallpapers'): {RESET}").strip()
+        default_sub = f"{len(video_files)} Super Wallpapers"
+        subtitle = input(f"{BOLD}Enter Subtitle [{default_sub}]: {RESET}").strip()
+        if not subtitle:
+            subtitle = default_sub
 
-    # Confirmation
-    print(f"\n{YELLOW}Ready to import wallpaper:{RESET}")
-    print(f"  • Video:      {video_path.name}")
-    print(f"  • Title:      {title}")
-    print(f"  • Collection: {cname} {'(New)' if is_new else ''}")
+    # Step 3: Titles and descriptions
+    items_to_process = []
+    if len(video_files) == 1:
+        vf = video_files[0]
+        default_title = clean_title_from_stem(vf.stem)
+        title = input(f"{BOLD}Wallpaper Title [{default_title}]: {RESET}").strip() or default_title
+        default_desc = f"{title} super wallpaper animation."
+        desc = input(f"{BOLD}Description [{default_desc}]: {RESET}").strip() or default_desc
+        items_to_process.append((vf, title, desc))
+    else:
+        print(f"\n{BOLD}Title naming mode for {len(video_files)} wallpapers:{RESET}")
+        print(f"  [1] {GREEN}Auto-generate clean titles from file names (Recommended for batches){RESET}")
+        print(f"  [2] Prompt for title and description for each video individually")
+        mode = input(f"{BOLD}Select [1-2, default=1]: {RESET}").strip()
 
-    confirm = input(f"\n{BOLD}Proceed? [Y/n]: {RESET}").strip().lower()
+        if mode == "2":
+            for vf in video_files:
+                default_title = clean_title_from_stem(vf.stem)
+                print(f"\n--- File: {BOLD}{vf.name}{RESET} ---")
+                t = input(f"  Title [{default_title}]: ").strip() or default_title
+                d = input(f"  Description [{t} super wallpaper]: ").strip() or f"{t} super wallpaper."
+                items_to_process.append((vf, t, d))
+        else:
+            for vf in video_files:
+                t = clean_title_from_stem(vf.stem)
+                d = f"{t} super wallpaper animation."
+                items_to_process.append((vf, t, d))
+
+    # Step 4: Summary & Confirmation
+    print(f"\n{YELLOW}{BOLD}Batch Import Summary:{RESET}")
+    print(f"  • Collection:  {BOLD}{cname}{RESET} {'(Brand New Collection)' if is_new else '(Existing Collection)'}")
+    if is_new:
+        print(f"  • Subtitle:    {subtitle}")
+    print(f"  • Total items: {len(items_to_process)}")
+    for vf, t, _ in items_to_process:
+        print(f"    - {vf.name} -> {BOLD}{t}{RESET}")
+
+    confirm = input(f"\n{BOLD}Proceed with batch import? [Y/n]: {RESET}").strip().lower()
     if confirm not in ["", "y", "yes"]:
         print("Cancelled.")
         sys.exit(0)
 
-    process_wallpaper(video_path, title, desc, cname, cid, is_new, subtitle)
+    # Step 5: Process all items
+    processed = []
+    for i, (vf, t, d) in enumerate(items_to_process):
+        # Only the very first item creates the collection banner in HomeScreen.kt if it's new
+        first_item_flag = is_new and (i == 0)
+        wid, title = process_wallpaper(vf, t, d, cname, cid, first_item_flag, subtitle)
+        processed.append((wid, title))
 
-    # Verification
+    # Step 6: Verify Build
     print(f"\n{CYAN}--- Verifying Android App Build ---{RESET}")
     build_res = subprocess.run(["./gradlew", "compileDebugKotlin"], cwd=REPO_ROOT)
     if build_res.returncode == 0:
-        print(f"\n{GREEN}{BOLD}🎉 Success! Code compiled cleanly with 0 errors.{RESET}")
-        print(f"You can now run `./gradlew assembleDebug` or install the new APK!")
+        print(f"\n{GREEN}{BOLD}🎉 Success! Batch import complete. Code compiled cleanly with 0 errors.{RESET}")
+        print(f"Imported {len(processed)} wallpapers into '{cname}':")
+        for wid, title in processed:
+            print(f"  • {title} ({wid})")
+        print(f"\nYou can run `./gradlew assembleDebug` to build the updated APK!")
     else:
         print(f"\n{RED}Build verification reported issues. Please check the compiler output above.{RESET}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] in ["--help", "-h"]:
-        print("Usage: python3 add_wallpaper.py")
-        sys.exit(0)
     interactive_wizard()
