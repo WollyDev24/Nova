@@ -32,3 +32,10 @@
 # AndroidX Compose runtime & compiler rules
 -keep class androidx.compose.** { *; }
 -dontwarn androidx.compose.**
+
+# Keep AndroidX Credential Manager & Google ID library
+-keep class androidx.credentials.** { *; }
+-dontwarn androidx.credentials.**
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-dontwarn com.google.android.libraries.identity.googleid.**
+-keep class com.google.android.gms.auth.api.signin.** { *; }
