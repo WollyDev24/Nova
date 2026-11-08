@@ -83,6 +83,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.TextButton
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,6 +103,7 @@ fun UploadWallpaperSheet(
     val currentUser by authManager.authStateFlow.collectAsState(initial = authManager.currentUser)
     val profileVersion by authManager.profileVersionFlow.collectAsState()
     val isGoogleUser = currentUser != null && !currentUser!!.isAnonymous
+    val isAdmin = remember(currentUser) { authManager.isCurrentUserAdmin(context) }
 
     var selectedVideoUri by remember { mutableStateOf<Uri?>(null) }
     var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -444,7 +446,12 @@ fun UploadWallpaperSheet(
                             withContext(Dispatchers.Main) {
                                 isUploading = false
                                 result.onSuccess { item ->
-                                    Toast.makeText(context, "Uploaded \"${item.title}\"!", Toast.LENGTH_SHORT).show()
+                                    val msg = if (item.isApproved) {
+                                        "Published \"${item.title}\" to Community!"
+                                    } else {
+                                        "\"${item.title}\" submitted for review! It will appear once approved."
+                                    }
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                     onUploaded(item)
                                     onDismiss()
                                 }.onFailure { err ->
@@ -480,7 +487,44 @@ fun UploadWallpaperSheet(
                 } else {
                     Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Publish Live Wallpaper", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(
+                        text = if (isAdmin) "Publish Live Wallpaper" else "Submit for Review",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+            }
+
+            // Moderation info card
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (isAdmin) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isAdmin) Icons.Rounded.Verified else Icons.Rounded.Info,
+                        contentDescription = null,
+                        tint = if (isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isAdmin) {
+                            "Admin Mode: Your wallpaper will be published immediately without review."
+                        } else {
+                            "Community submissions are reviewed by moderators before appearing publicly in the feed."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isAdmin) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

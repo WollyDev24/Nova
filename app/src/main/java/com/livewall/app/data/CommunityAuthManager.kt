@@ -195,8 +195,26 @@ class CommunityAuthManager(
         return FALLBACK_WEB_CLIENT_ID
     }
 
+    /**
+     * Checks if the current user is an authorized administrator / moderator.
+     * Evaluates verified Google email against developer admin whitelist or local moderator override.
+     */
+    fun isCurrentUserAdmin(context: Context): Boolean {
+        val email = currentUser?.email
+        if (!email.isNullOrBlank() && ADMIN_EMAILS.any { it.equals(email.trim(), ignoreCase = true) }) {
+            return true
+        }
+        val prefs = WallpaperPreferences(context)
+        return prefs.isModeratorModeEnabled
+    }
+
     companion object {
         const val FALLBACK_WEB_CLIENT_ID = "18387689298-4phk0c10at8il0c289cj33cprim7d8pf.apps.googleusercontent.com"
+        val ADMIN_EMAILS = setOf(
+            "wollywoll8844@gmail.com",
+            "balthasar.gasmann@gmail.com"
+        )
+        const val MODERATOR_PIN = "2408"
     }
 
     /**

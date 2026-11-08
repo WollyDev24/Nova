@@ -35,7 +35,7 @@ class CommunityRepository(
     private val usersCollection = firestore.collection("users")
 
     /**
-     * Fetches trending wallpapers ordered by likes.
+     * Fetches trending wallpapers ordered by likes (only approved content).
      */
     suspend fun getTrendingWallpapers(limit: Long = 30): Result<List<CommunityWallpaper>> = withContext(Dispatchers.IO) {
         try {
@@ -46,14 +46,15 @@ class CommunityRepository(
                 .get()
                 .await()
             val list = snapshot.toObjects(CommunityWallpaper::class.java)
-            Result.success(list)
+            val approved = list.filter { it.isApproved }
+            Result.success(approved)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
     /**
-     * Fetches newest community wallpapers.
+     * Fetches newest community wallpapers (only approved content).
      */
     suspend fun getRecentWallpapers(limit: Long = 30): Result<List<CommunityWallpaper>> = withContext(Dispatchers.IO) {
         try {
@@ -64,7 +65,8 @@ class CommunityRepository(
                 .get()
                 .await()
             val list = snapshot.toObjects(CommunityWallpaper::class.java)
-            Result.success(list)
+            val approved = list.filter { it.isApproved }
+            Result.success(approved)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -165,6 +167,12 @@ class CommunityRepository(
             val thumbDataUri = "data:image/jpeg;base64," + Base64.encodeToString(thumbnailBytes, Base64.NO_WRAP)
 
             // 3. Write Firestore record (100% free Spark plan)
+            val initialStatus = if (authManager.isCurrentUserAdmin(context)) {
+                CommunityWallpaper.STATUS_APPROVED
+            } else {
+                CommunityWallpaper.STATUS_PENDING
+            }
+
             val communityWallpaper = CommunityWallpaper(
                 id = newId,
                 title = title.trim(),
@@ -179,7 +187,8 @@ class CommunityRepository(
                 fileSizeBytes = thumbnailBytes.size.toLong(),
                 downloadsCount = 0L,
                 likesCount = 0L,
-                tags = tags
+                tags = tags,
+                status = initialStatus
             )
 
             collection.document(newId).set(communityWallpaper).await()
@@ -190,7 +199,7 @@ class CommunityRepository(
     }
 
     /**
-     * Deletes a community wallpaper if the requesting user is the original creator.
+     * Deletes a community wallpaper if the requesting user is the original creator or an administrator.
      */
     suspend fun deleteWallpaper(wallpaperId: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
@@ -198,7 +207,7 @@ class CommunityRepository(
             val docRef = collection.document(wallpaperId)
             val doc = docRef.get().await()
             val authorId = doc.getString("authorId")
-            if (authorId != user.uid) {
+            if (authorId != user.uid && !authManager.isCurrentUserAdmin(context)) {
                 return@withContext Result.failure(IllegalStateException("You can only delete wallpapers you published."))
             }
             docRef.delete().await()
@@ -206,6 +215,96 @@ class CommunityRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Moderation Console: Fetches all community submissions across all statuses.
+     */
+    suspend fun getAllWallpapersForModeration(limit: Long = 100): Result<List<CommunityWallpaper>> = withContext(Dispatchers.IO) {
+        try {
+            authManager.ensureAuthenticated()
+            val snapshot = collection
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(limit)
+                .get()
+                .await()
+            val list = snapshot.toObjects(CommunityWallpaper::class.java)
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Moderation Console: Approves a pending wallpaper so it appears live in the community feed.
+     */
+    suspend fun approveWallpaper(wallpaperId: String, reviewerName: String = "Admin"): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            authManager.ensureAuthenticated()
+            collection.document(wallpaperId).update(
+                mapOf(
+                    "status" to CommunityWallpaper.STATUS_APPROVED,
+                    "reviewedBy" to reviewerName,
+                    "reviewedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Moderation Console: Rejects a wallpaper with an optional review explanation.
+     */
+    suspend fun rejectWallpaper(
+        wallpaperId: String,
+        reason: String,
+        reviewerName: String = "Admin"
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            authManager.ensureAuthenticated()
+            collection.document(wallpaperId).update(
+                mapOf(
+                    "status" to CommunityWallpaper.STATUS_REJECTED,
+                    "reviewNote" to reason.trim(),
+                    "reviewedBy" to reviewerName,
+                    "reviewedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Moderation Console: Force-deletes any community wallpaper as an administrator.
+     */
+    suspend fun adminDeleteWallpaper(wallpaperId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            authManager.ensureAuthenticated()
+            collection.document(wallpaperId).delete().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Real-time flow of the count of pending wallpaper submissions.
+     */
+    fun getPendingCountFlow(): Flow<Int> = callbackFlow {
+        val registration = collection
+            .whereEqualTo("status", CommunityWallpaper.STATUS_PENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(0)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.size() ?: 0)
+            }
+        awaitClose { registration.remove() }
     }
 
     /**

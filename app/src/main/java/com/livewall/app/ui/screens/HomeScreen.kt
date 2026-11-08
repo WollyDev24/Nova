@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudUpload
@@ -44,6 +45,8 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -183,9 +186,15 @@ fun HomeScreen(
     var communityWallpapersList by remember { mutableStateOf<List<WallpaperItem>>(emptyList()) }
     var selectedCollection by remember { mutableStateOf<CollectionItem?>(null) }
     var showSettings by remember { mutableStateOf(false) }
+    var showManagementConsole by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
     var pendingUpdateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+
+    val pendingSubmissionsCount by communityRepo.getPendingCountFlow().collectAsState(initial = 0)
+    val isCurrentUserAdmin = remember(currentUser, prefs.isModeratorModeEnabled) {
+        communityRepo.authManager.isCurrentUserAdmin(context)
+    }
 
     LaunchedEffect(Unit) {
         if (prefs.autoCheckUpdates) {
@@ -442,6 +451,33 @@ fun HomeScreen(
                                 Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = "Publish to Community", modifier = Modifier.size(19.dp))
                             }
                             Spacer(modifier = Modifier.width(4.dp))
+                            if (isCurrentUserAdmin || pendingSubmissionsCount > 0) {
+                                FilledTonalIconButton(
+                                    onClick = { showManagementConsole = true },
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    BadgedBox(
+                                        badge = {
+                                            if (pendingSubmissionsCount > 0) {
+                                                Badge(
+                                                    containerColor = MaterialTheme.colorScheme.error,
+                                                    contentColor = MaterialTheme.colorScheme.onError
+                                                ) {
+                                                    Text(pendingSubmissionsCount.toString(), fontSize = 9.sp)
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.AdminPanelSettings,
+                                            contentDescription = "Content Moderation Console",
+                                            modifier = Modifier.size(19.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
                             FilledTonalIconButton(
                                 onClick = { showUserProfile = true },
                                 shape = CircleShape,
@@ -674,6 +710,9 @@ fun HomeScreen(
             onDismiss = {
                 showSettings = false
                 activeTrigger = prefs.trigger
+            },
+            onOpenManagementConsole = {
+                showManagementConsole = true
             }
         )
     }
@@ -699,6 +738,14 @@ fun HomeScreen(
         UserProfileSheet(
             authManager = communityRepo.authManager,
             onDismiss = { showUserProfile = false }
+        )
+    }
+
+    // Modal Content Moderation & Management Console Sheet
+    if (showManagementConsole) {
+        ManagementConsoleSheet(
+            repository = communityRepo,
+            onDismiss = { showManagementConsole = false }
         )
     }
 

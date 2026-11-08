@@ -23,9 +23,27 @@ data class CommunityWallpaper(
     val downloadsCount: Long = 0L,
     val likesCount: Long = 0L,
     val tags: List<String> = emptyList(),
+    val status: String = STATUS_APPROVED,
+    val reviewNote: String = "",
+    val reviewedBy: String = "",
+    val reviewedAt: Date? = null,
     @ServerTimestamp
     val createdAt: Date? = null
 ) {
+    val isApproved: Boolean
+        get() = status.isBlank() || status.equals(STATUS_APPROVED, ignoreCase = true)
+
+    val isPending: Boolean
+        get() = status.equals(STATUS_PENDING, ignoreCase = true)
+
+    val isRejected: Boolean
+        get() = status.equals(STATUS_REJECTED, ignoreCase = true)
+
+    companion object {
+        const val STATUS_PENDING = "PENDING"
+        const val STATUS_APPROVED = "APPROVED"
+        const val STATUS_REJECTED = "REJECTED"
+    }
     /**
      * Converts to internal [WallpaperItem] for previewing & setting as active live wallpaper.
      */
