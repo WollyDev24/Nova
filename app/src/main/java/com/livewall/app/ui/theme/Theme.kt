@@ -58,14 +58,14 @@ fun LiveWallTheme(
         MotionScheme.standard()
     }
 
-    @Suppress("DEPRECATION")
-    CompositionLocalProvider(
-        LocalOverscrollConfiguration provides null,
-        LocalOverscrollFactory provides null
+    MaterialExpressiveTheme(
+        colorScheme = colorScheme,
+        motionScheme = motionScheme
     ) {
-        MaterialExpressiveTheme(
-            colorScheme = colorScheme,
-            motionScheme = motionScheme,
+        @Suppress("DEPRECATION")
+        CompositionLocalProvider(
+            LocalOverscrollConfiguration provides null,
+            LocalOverscrollFactory provides null,
             content = content
         )
     }
