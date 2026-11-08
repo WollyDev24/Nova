@@ -278,6 +278,8 @@ class CommunityAuthManager(
             }
         } catch (e: GetCredentialCancellationException) {
             Result.failure(e)
+        } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+            Result.failure(IllegalStateException("No credentials available. Verify a Google account is active on this device and the APK signing SHA-1 is registered in Firebase.", e))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

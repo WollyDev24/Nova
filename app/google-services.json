@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "18387689298",
+    "project_id": "nova-d8a4e",
+    "storage_bucket": "nova-d8a4e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:18387689298:android:5b14ee42ff4f3c3410648b",
+        "android_client_info": {
+          "package_name": "com.livewall.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "18387689298-c5tqa08nkts866rccg9hh31b7if5ekr7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.livewall.app",
+            "certificate_hash": "cf5ff75836b6c8616fad173df35c7ac78788fb25"
+          }
+        },
+        {
+          "client_id": "18387689298-4phk0c10at8il0c289cj33cprim7d8pf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpkfCQe4gxAJB4FYL6fej5MYficcj_xRo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "18387689298-4phk0c10at8il0c289cj33cprim7d8pf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

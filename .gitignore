@@ -30,9 +30,11 @@ render.experimental.xml
 *.jks
 *.keystore
 keystore.properties
+!keystore/debug.keystore
 
 # Google Services (Firebase configuration)
-google-services.json
+# Unignored so CI & local builds share the verified Firebase project config
+!app/google-services.json
 
 # Android Profiling
 *.hprof

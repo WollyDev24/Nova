@@ -42,6 +42,15 @@ android {
     }
 
     signingConfigs {
+        getByName("debug") {
+            val repoDebugKeystore = rootProject.file("keystore/debug.keystore")
+            if (repoDebugKeystore.exists()) {
+                storeFile = repoDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         if (hasSigningConfig) {
             create("release") {
                 storeFile = file(signingStoreFile!!)

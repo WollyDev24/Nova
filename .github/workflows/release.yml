@@ -55,40 +55,11 @@ jobs:
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
-          elif [ ! -f app/google-services.json ]; then
-            echo "Creating minimal fallback google-services.json for CI..."
-            cat << 'EOF' > app/google-services.json
-          {
-            "project_info": {
-              "project_number": "18387689298",
-              "project_id": "nova-d8a4e",
-              "storage_bucket": "nova-d8a4e.firebasestorage.app"
-            },
-            "client": [
-              {
-                "client_info": {
-                  "mobilesdk_app_id": "1:18387689298:android:5b14ee42ff4f3c3410648b",
-                  "android_client_info": {
-                    "package_name": "com.livewall.app"
-                  }
-                },
-                "oauth_client": [
-                  {
-                    "client_id": "18387689298-4phk0c10at8il0c289cj33cprim7d8pf.apps.googleusercontent.com",
-                    "client_type": 3
-                  }
-                ],
-                "api_key": [
-                  {
-                    "current_key": "AIzaSyDummyKeyForCiBuildsOnly0000000000"
-                  }
-                ],
-                "services": {}
-              }
-            ],
-            "configuration_version": "1"
-          }
-          EOF
+            echo "Used GOOGLE_SERVICES_JSON from Actions secrets."
+          elif [ -f app/google-services.json ]; then
+            echo "Used committed app/google-services.json."
+          else
+            echo "Warning: app/google-services.json missing and secret not set."
           fi
 
       - name: Set up Android SDK
@@ -111,9 +82,9 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.jks"
             printf 'storeFile=%s/keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
               "$RUNNER_TEMP" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
-            echo "Keystore signing configured."
+            echo "Keystore signing configured with custom release keystore."
           else
-            echo "No keystore secret detected. Falling back to debug signing config."
+            echo "No custom keystore secret detected. Using keystore/debug.keystore (SHA-1 registered in Firebase)."
           fi
 
       - name: Determine Version
