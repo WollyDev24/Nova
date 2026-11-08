@@ -6,11 +6,29 @@ data class WallpaperItem(
     val collection: String,
     val videoUri: String,
     val thumbnailUri: String,
+    val previewThumbnailUri: String? = null,
     val durationSec: Float,
     val resolution: String,
     val description: String = "",
     val isCustom: Boolean = false
 ) {
+    /**
+     * Resolves the start-frame thumbnail for the preview dialog so the video seamlessly
+     * plays forward from its exact resting initial frame without jumping or ghosting.
+     */
+    val effectivePreviewThumbnailUri: String
+        get() = previewThumbnailUri ?: run {
+            if (thumbnailUri.startsWith("file:///android_asset/thumbnails/") &&
+                !thumbnailUri.startsWith("file:///android_asset/thumbnails/start/")
+            ) {
+                thumbnailUri.replace(
+                    "file:///android_asset/thumbnails/",
+                    "file:///android_asset/thumbnails/start/"
+                )
+            } else {
+                thumbnailUri
+            }
+        }
     companion object {
         val BUNDLED_WALLPAPERS = listOf(
             // Xiaomi 18 Pro Max

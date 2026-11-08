@@ -6,7 +6,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -138,14 +138,18 @@ fun VideoPlayerView(
         onPlayerReady(exoPlayer)
     }
 
+    var isFirstLaunch by remember(videoUri) { mutableStateOf(true) }
     LaunchedEffect(autoPlay) {
         exoPlayer.playWhenReady = autoPlay
         if (autoPlay) {
-            exoPlayer.seekTo(0)
+            if (!isFirstLaunch && exoPlayer.playbackState == Player.STATE_ENDED) {
+                exoPlayer.seekTo(0)
+            }
             exoPlayer.play()
         } else {
             exoPlayer.pause()
         }
+        isFirstLaunch = false
     }
 
     LaunchedEffect(scalingMode) {
@@ -156,11 +160,11 @@ fun VideoPlayerView(
         }
     }
 
-    // Keep PlayerView hidden (alpha = 0) until the very first frame is decoded and rendered.
-    // This completely eliminates the blank grey shutter box and keeps the thumbnail backdrop visible!
+    // Instantly reveal PlayerView (alpha = 1) the exact millisecond the first frame is decoded.
+    // Since the backdrop underneath matches frame 0, there is zero crossfade ghosting or reverse flicker!
     val playerAlpha by animateFloatAsState(
         targetValue = if (isFirstFrameRendered) 1f else 0f,
-        animationSpec = tween(durationMillis = 280),
+        animationSpec = snap(),
         label = "playerAlpha"
     )
 

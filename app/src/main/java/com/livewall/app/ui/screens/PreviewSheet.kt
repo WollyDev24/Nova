@@ -130,11 +130,11 @@ fun PreviewSheet(
                 val isCurrent = page == pagerState.currentPage
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // High-res static thumbnail displayed immediately and acts as backdrop while video loads
+                    // Start-frame static backdrop displayed immediately while video initializes
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(WallpaperColorHelper.resolveCoilModel(item.thumbnailUri))
-                            .crossfade(true)
+                            .data(WallpaperColorHelper.resolveCoilModel(item.effectivePreviewThumbnailUri))
+                            .crossfade(false)
                             .build(),
                         contentDescription = item.title,
                         contentScale = ContentScale.Crop,
