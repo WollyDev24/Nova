@@ -262,7 +262,7 @@ class CommunityAuthManager(
 
     /**
      * Authenticates with Google using Android Credential Manager (Android 14+ / Google Play Services).
-     * Automatically links anonymous credentials or signs into existing account.
+     * Displays the native One UI / Samsung Credential Manager bottom sheet.
      */
     suspend fun signInWithGoogle(context: Context, serverClientId: String): Result<FirebaseUser> {
         return try {
@@ -270,26 +270,20 @@ class CommunityAuthManager(
             val credentialManager = CredentialManager.create(activityContext)
             val cleanClientId = serverClientId.trim()
 
-            // Step 1: Attempt explicit Sign-In with Google option (recommended for explicit button tap)
-            val response = try {
-                val signInOption = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption.Builder(cleanClientId)
-                    .build()
-                val request = GetCredentialRequest.Builder()
-                    .addCredentialOption(signInOption)
-                    .build()
-                credentialManager.getCredential(request = request, context = activityContext)
-            } catch (e: androidx.credentials.exceptions.NoCredentialException) {
-                // Step 2: Fallback to GetGoogleIdOption without account filtering
-                val googleIdOption = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(cleanClientId)
-                    .setAutoSelectEnabled(false)
-                    .build()
-                val fallbackRequest = GetCredentialRequest.Builder()
-                    .addCredentialOption(googleIdOption)
-                    .build()
-                credentialManager.getCredential(request = fallbackRequest, context = activityContext)
-            }
+            val googleIdOption = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(cleanClientId)
+                .setAutoSelectEnabled(false)
+                .build()
+
+            val request = GetCredentialRequest.Builder()
+                .addCredentialOption(googleIdOption)
+                .build()
+
+            val response = credentialManager.getCredential(
+                request = request,
+                context = activityContext
+            )
 
             val credential = response.credential
             if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
@@ -303,8 +297,6 @@ class CommunityAuthManager(
                 Result.failure(IllegalStateException("Unsupported credential type: ${credential.type}"))
             }
         } catch (e: GetCredentialCancellationException) {
-            Result.failure(e)
-        } catch (e: androidx.credentials.exceptions.NoCredentialException) {
             Result.failure(e)
         } catch (e: CancellationException) {
             throw e
