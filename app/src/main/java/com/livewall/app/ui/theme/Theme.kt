@@ -1,6 +1,9 @@
 package com.livewall.app.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollConfiguration
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -9,6 +12,7 @@ import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +38,7 @@ fun rememberLiveWallThemeState(): LiveWallThemeState {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun LiveWallTheme(
     state: LiveWallThemeState = rememberLiveWallThemeState(),
@@ -54,9 +58,15 @@ fun LiveWallTheme(
         MotionScheme.standard()
     }
 
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        motionScheme = motionScheme,
-        content = content
-    )
+    @Suppress("DEPRECATION")
+    CompositionLocalProvider(
+        LocalOverscrollConfiguration provides null,
+        LocalOverscrollFactory provides null
+    ) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            motionScheme = motionScheme,
+            content = content
+        )
+    }
 }

@@ -62,6 +62,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import com.livewall.app.ui.components.FloatingNavigationBar
 import com.livewall.app.ui.components.NavDestination
+import com.livewall.app.ui.components.instantBounceOverscroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -426,7 +427,8 @@ fun HomeScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = 20.dp)
+                    .instantBounceOverscroll(),
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 8.dp,
                     bottom = innerPadding.calculateBottomPadding() + 12.dp

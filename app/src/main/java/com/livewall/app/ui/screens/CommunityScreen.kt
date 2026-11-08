@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.livewall.app.data.CommunityRepository
 import com.livewall.app.model.CommunityWallpaper
+import com.livewall.app.ui.components.instantBounceOverscroll
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.livewall.app.ui.components.CommunityWallpaperCard
 import com.livewall.app.ui.theme.ShapeCard
@@ -128,7 +129,9 @@ fun CommunityScreen(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .instantBounceOverscroll(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
