@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
@@ -26,6 +27,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.livewall.app.model.WallpaperItem
@@ -41,6 +43,19 @@ fun CollectionSheet(
     onDismiss: () -> Unit,
     onWallpaperSelected: (WallpaperItem) -> Unit
 ) {
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val columns = when {
+        screenWidthDp >= 1000 -> 4
+        screenWidthDp >= 650 -> 3
+        else -> 2
+    }
+    val sheetMaxWidth = when {
+        screenWidthDp >= 1200 -> 1080.dp
+        screenWidthDp >= 900 -> 860.dp
+        else -> BottomSheetDefaults.SheetMaxWidth
+    }
+
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -49,18 +64,21 @@ fun CollectionSheet(
         sheetState = sheetState,
         shape = ShapeBottomSheet,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        sheetMaxWidth = sheetMaxWidth,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = if (screenWidthDp >= 900) 28.dp else 20.dp)
                 .padding(top = 4.dp, bottom = navBarBottom + 28.dp)
         ) {
-            // Header
+            // Header Bar
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -73,7 +91,7 @@ fun CollectionSheet(
                     )
                     Text(
                         text = "${wallpapers.size} Super Wallpapers",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -88,11 +106,11 @@ fun CollectionSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Grid of wallpapers in this collection (2 columns) rendering edge-to-edge behind navbar
-            wallpapers.chunked(2).forEach { rowItems ->
+            // Grid of wallpapers in this collection (adaptive columns)
+            wallpapers.chunked(columns).forEach { rowItems ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     rowItems.forEach { item ->
                         Box(modifier = Modifier.weight(1f)) {
@@ -103,11 +121,12 @@ fun CollectionSheet(
                             )
                         }
                     }
-                    if (rowItems.size == 1) {
+                    val emptySlots = columns - rowItems.size
+                    for (i in 0 until emptySlots) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
             }
         }
     }

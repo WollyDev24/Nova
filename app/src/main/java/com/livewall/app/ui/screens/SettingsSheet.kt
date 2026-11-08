@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -57,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -121,11 +123,15 @@ fun SettingsSheet(
         }
     }
 
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val sheetMaxWidth = if (screenWidthDp >= 900) 720.dp else BottomSheetDefaults.SheetMaxWidth
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = ShapeBottomSheet,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        sheetMaxWidth = sheetMaxWidth,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(

@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -144,6 +145,21 @@ fun CommunityScreen(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val columns = when {
+        screenWidthDp >= 1300 -> 5
+        screenWidthDp >= 950 -> 4
+        screenWidthDp >= 650 -> 3
+        else -> 2
+    }
+    val contentHorizontalPadding = when {
+        screenWidthDp >= 1300 -> ((screenWidthDp - 1200) / 2).coerceAtLeast(36).dp
+        screenWidthDp >= 950 -> 32.dp
+        screenWidthDp >= 650 -> 24.dp
+        else -> 20.dp
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
@@ -154,7 +170,7 @@ fun CommunityScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = contentHorizontalPadding),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -203,7 +219,7 @@ fun CommunityScreen(
                     color = MaterialTheme.colorScheme.surfaceContainer,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = contentHorizontalPadding)
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -248,7 +264,7 @@ fun CommunityScreen(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .padding(horizontal = contentHorizontalPadding)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -289,16 +305,16 @@ fun CommunityScreen(
             }
         }
 
-        // Wallpapers 2-column Grid
+        // Wallpapers Adaptive Multi-column Grid
         if (!isLoading && filteredList.isNotEmpty()) {
-            val chunked = filteredList.chunked(2)
+            val chunked = filteredList.chunked(columns)
             items(chunked.size) { rowIndex ->
                 val rowWallpapers = chunked[rowIndex]
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = contentHorizontalPadding),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     rowWallpapers.forEach { item ->
                         val isLiked = likedMap[item.id] ?: false
@@ -320,7 +336,8 @@ fun CommunityScreen(
                             )
                         }
                     }
-                    if (rowWallpapers.size == 1) {
+                    val emptySlots = columns - rowWallpapers.size
+                    for (i in 0 until emptySlots) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
                 }
@@ -335,7 +352,7 @@ fun CommunityScreen(
                     color = MaterialTheme.colorScheme.surfaceContainer,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp)
+                        .padding(horizontal = contentHorizontalPadding)
                 ) {
                     Column(
                         modifier = Modifier

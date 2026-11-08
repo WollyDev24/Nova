@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -76,6 +77,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -225,11 +227,20 @@ fun ManagementConsoleSheet(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val sheetMaxWidth = when {
+        screenWidthDp >= 1200 -> 1000.dp
+        screenWidthDp >= 900 -> 840.dp
+        else -> BottomSheetDefaults.SheetMaxWidth
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = ShapeBottomSheet,
         containerColor = MaterialTheme.colorScheme.surface,
+        sheetMaxWidth = sheetMaxWidth,
         dragHandle = null
     ) {
         Column(

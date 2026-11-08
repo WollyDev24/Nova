@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -142,6 +144,9 @@ fun UserProfileSheet(
         }
     }
 
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val sheetMaxWidth = if (screenWidthDp >= 900) 640.dp else BottomSheetDefaults.SheetMaxWidth
+
     ModalBottomSheet(
         onDismissRequest = {
             if (!isSigningIn) {
@@ -151,6 +156,7 @@ fun UserProfileSheet(
         sheetState = sheetState,
         shape = ShapeBottomSheet,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        sheetMaxWidth = sheetMaxWidth,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(

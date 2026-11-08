@@ -85,6 +85,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -329,6 +330,16 @@ fun HomeScreen(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+    val isTablet = screenWidthDp >= 600
+    val homeHorizontalPadding = when {
+        screenWidthDp >= 1300 -> ((screenWidthDp - 1100) / 2).coerceAtLeast(36).dp
+        screenWidthDp >= 950 -> 36.dp
+        screenWidthDp >= 600 -> 28.dp
+        else -> 20.dp
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -537,7 +548,7 @@ fun HomeScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 20.dp),
+                    .padding(horizontal = homeHorizontalPadding),
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 8.dp,
                     bottom = innerPadding.calculateBottomPadding() + 12.dp
@@ -601,6 +612,7 @@ fun HomeScreen(
                     HeroWallpaperCard(
                         wallpaper = activeWallpaper,
                         trigger = activeTrigger,
+                        isTablet = isTablet,
                         onPreviewClick = { previewWallpaper = activeWallpaper }
                     )
                 }
@@ -628,17 +640,44 @@ fun HomeScreen(
                     }
                 }
 
-                // Stacked Collection Banner Cards (e.g. "ColorOS", "Xiaomi 18 Pro Max", etc.)
-                items(collections.size, key = { collections[it].id }) { index ->
-                    val col = collections[index]
-                    CollectionBannerCard(
-                        collectionName = col.name,
-                        subtitle = col.subtitle,
-                        coverImageUri = col.coverUri,
-                        wallpaperCount = col.items.size,
-                        containsActive = col.items.any { it.id == activeWallpaperId },
-                        onClick = { selectedCollection = col }
-                    )
+                // Collections: 2-column grid on tablets / landscape, stacked banners on phones
+                if (isTablet) {
+                    val chunkedCols = collections.chunked(2)
+                    items(chunkedCols.size, key = { chunkedCols[it].first().id }) { rowIndex ->
+                        val rowCols = chunkedCols[rowIndex]
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            for (col in rowCols) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    CollectionBannerCard(
+                                        collectionName = col.name,
+                                        subtitle = col.subtitle,
+                                        coverImageUri = col.coverUri,
+                                        wallpaperCount = col.items.size,
+                                        containsActive = col.items.any { it.id == activeWallpaperId },
+                                        onClick = { selectedCollection = col }
+                                    )
+                                }
+                            }
+                            if (rowCols.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                } else {
+                    items(collections.size, key = { collections[it].id }) { index ->
+                        val col = collections[index]
+                        CollectionBannerCard(
+                            collectionName = col.name,
+                            subtitle = col.subtitle,
+                            coverImageUri = col.coverUri,
+                            wallpaperCount = col.items.size,
+                            containsActive = col.items.any { it.id == activeWallpaperId },
+                            onClick = { selectedCollection = col }
+                        )
+                    }
                 }
             }
         } else {
@@ -796,6 +835,7 @@ fun HomeScreen(
 private fun HeroWallpaperCard(
     wallpaper: WallpaperItem,
     trigger: PlaybackTrigger,
+    isTablet: Boolean = false,
     onPreviewClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -810,7 +850,7 @@ private fun HeroWallpaperCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(if (isTablet) 220.dp else 180.dp)
         ) {
             // Background image with dark gradient
             AsyncImage(

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Title
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -157,11 +159,15 @@ fun UploadWallpaperSheet(
         }
     }
 
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val sheetMaxWidth = if (screenWidthDp >= 900) 720.dp else BottomSheetDefaults.SheetMaxWidth
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = ShapeBottomSheet,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        sheetMaxWidth = sheetMaxWidth,
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(
