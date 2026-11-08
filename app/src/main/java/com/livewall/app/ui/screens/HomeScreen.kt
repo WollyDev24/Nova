@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,17 +27,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Button
@@ -64,6 +69,7 @@ import com.livewall.app.ui.components.FloatingNavigationBar
 import com.livewall.app.ui.components.NavDestination
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +87,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.livewall.app.data.CommunityRepository
 import com.livewall.app.data.CustomWallpaperManager
 import com.livewall.app.data.PlaybackTrigger
@@ -91,9 +99,13 @@ import com.livewall.app.service.LiveWallpaperService
 import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.components.CollectionBannerCard
 import com.livewall.app.ui.components.TriggerSelector
+import com.livewall.app.ui.components.UpdateDialog
 import com.livewall.app.ui.theme.LiveWallThemeState
 import com.livewall.app.ui.theme.ShapeCard
 import com.livewall.app.ui.theme.ShapePill
+import com.livewall.app.util.UpdateCheckResult
+import com.livewall.app.util.UpdateInfo
+import com.livewall.app.util.UpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -141,8 +153,17 @@ fun HomeScreen(
 
     var currentTab by remember { mutableStateOf(MainNavTab.CURATED) }
     var showUploadSheet by remember { mutableStateOf(false) }
+    var showUserProfile by remember { mutableStateOf(false) }
     var isSearchOpen by remember { mutableStateOf(false) }
     var communitySearchQuery by remember { mutableStateOf("") }
+
+    val currentUser by communityRepo.authManager.authStateFlow.collectAsState(initial = communityRepo.authManager.currentUser)
+    val profileVersion by communityRepo.authManager.profileVersionFlow.collectAsState()
+    val isGoogleUser = currentUser != null && !currentUser!!.isAnonymous
+
+    LaunchedEffect(Unit) {
+        communityRepo.authManager.syncGoogleProfileIfNeeded()
+    }
 
     LaunchedEffect(currentTab) {
         if (currentTab != MainNavTab.COMMUNITY) {
@@ -159,9 +180,21 @@ fun HomeScreen(
     var activeWallpaperId by remember { mutableStateOf(prefs.selectedWallpaperId) }
     var activeTrigger by remember { mutableStateOf(prefs.trigger) }
     var previewWallpaper by remember { mutableStateOf<WallpaperItem?>(null) }
+    var communityWallpapersList by remember { mutableStateOf<List<WallpaperItem>>(emptyList()) }
     var selectedCollection by remember { mutableStateOf<CollectionItem?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var isImporting by remember { mutableStateOf(false) }
+    var pendingUpdateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (prefs.autoCheckUpdates) {
+            val result = UpdateManager.checkForUpdates(context)
+            if (result is UpdateCheckResult.Available) {
+                pendingUpdateInfo = result.updateInfo
+            }
+        }
+    }
 
     val customWallpapers = remember {
         mutableStateListOf<WallpaperItem>().apply { addAll(prefs.getCustomWallpapers()) }
@@ -324,11 +357,13 @@ fun HomeScreen(
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "LiveWall",
+                                text = "Nova",
                                 style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Black
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                softWrap = false
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Surface(
                                 shape = ShapePill,
                                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -336,9 +371,14 @@ fun HomeScreen(
                             ) {
                                 Text(
                                     text = if (currentTab == MainNavTab.CURATED) "Super Wallpapers" else "Community Hub",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 10.5.sp,
+                                        letterSpacing = 0.sp
+                                    ),
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                                 )
                             }
                         }
@@ -379,31 +419,66 @@ fun HomeScreen(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
                                     )
                                 },
-                                shape = CircleShape
+                                shape = CircleShape,
+                                modifier = Modifier.size(38.dp)
                             ) {
-                                Icon(imageVector = Icons.Rounded.Add, contentDescription = "Import Video")
+                                Icon(imageVector = Icons.Rounded.Add, contentDescription = "Import Video", modifier = Modifier.size(20.dp))
                             }
+                            Spacer(modifier = Modifier.width(6.dp))
                         } else {
                             FilledTonalIconButton(
                                 onClick = { isSearchOpen = true },
-                                shape = CircleShape
+                                shape = CircleShape,
+                                modifier = Modifier.size(38.dp)
                             ) {
-                                Icon(imageVector = Icons.Rounded.Search, contentDescription = "Search Community Wallpapers")
+                                Icon(imageVector = Icons.Rounded.Search, contentDescription = "Search Community Wallpapers", modifier = Modifier.size(19.dp))
                             }
+                            Spacer(modifier = Modifier.width(4.dp))
                             FilledTonalIconButton(
                                 onClick = { showUploadSheet = true },
-                                shape = CircleShape
+                                shape = CircleShape,
+                                modifier = Modifier.size(38.dp)
                             ) {
-                                Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = "Publish to Community")
+                                Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = "Publish to Community", modifier = Modifier.size(19.dp))
                             }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            FilledTonalIconButton(
+                                onClick = { showUserProfile = true },
+                                shape = CircleShape,
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                val photoUrl = communityRepo.authManager.getPhotoUrl(currentUser)
+                                if (isGoogleUser && photoUrl != null) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(photoUrl)
+                                            .crossfade(true)
+                                            .build(),
+                                        contentDescription = "User Profile",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = if (isGoogleUser) Icons.Rounded.Person else Icons.Rounded.AccountCircle,
+                                        contentDescription = "User Profile",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
                         }
 
                         FilledTonalIconButton(
                             onClick = { showSettings = true },
-                            shape = CircleShape
+                            shape = CircleShape,
+                            modifier = Modifier.size(38.dp)
                         ) {
-                            Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
+                            Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings", modifier = Modifier.size(19.dp))
                         }
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -433,6 +508,58 @@ fun HomeScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Update Available Banner
+                if (pendingUpdateInfo != null) {
+                    item {
+                        Surface(
+                            shape = ShapeCard,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            shadowElevation = 2.dp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(ShapeCard)
+                                .clickable { showUpdateDialog = true }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.SystemUpdate,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "Nova v${pendingUpdateInfo?.latestVersion} Available",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Tap to view release notes & install",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Active Wallpaper Showcase
                 item {
                     HeroWallpaperCard(
@@ -482,10 +609,20 @@ fun HomeScreen(
             // Community Hub Feed
             CommunityScreen(
                 repository = communityRepo,
-                onWallpaperSelected = { communityItem ->
-                    previewWallpaper = communityItem.toWallpaperItem()
+                onWallpaperSelected = { communityItem, currentList ->
+                    val communityDir = File(context.filesDir, "community_videos")
+                    val localFile = File(communityDir, "community_${communityItem.id}.mp4")
+                    val localUri = if (localFile.exists() && localFile.length() > 0) localFile.absolutePath else null
+
+                    communityWallpapersList = currentList.map { item ->
+                        val f = File(communityDir, "community_${item.id}.mp4")
+                        val uri = if (f.exists() && f.length() > 0) f.absolutePath else null
+                        item.toWallpaperItem(uri)
+                    }
+                    previewWallpaper = communityItem.toWallpaperItem(localUri)
                 },
                 onOpenUpload = { showUploadSheet = true },
+                onOpenProfile = { showUserProfile = true },
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 8.dp,
                     bottom = innerPadding.calculateBottomPadding() + 12.dp
@@ -510,7 +647,11 @@ fun HomeScreen(
 
     // Modal Preview Bottom Sheet (Supports horizontal swipe scrolling between wallpapers)
     previewWallpaper?.let { item ->
-        val previewList = selectedCollection?.items ?: allWallpapers
+        val previewList = when {
+            item.collection == "Community" -> communityWallpapersList.ifEmpty { listOf(item) }
+            selectedCollection != null -> selectedCollection!!.items
+            else -> allWallpapers
+        }
         PreviewSheet(
             initialWallpaper = item,
             wallpapers = previewList,
@@ -545,7 +686,19 @@ fun HomeScreen(
             onUploaded = { newWallpaper ->
                 showUploadSheet = false
                 previewWallpaper = newWallpaper.toWallpaperItem()
+            },
+            onOpenProfile = {
+                showUploadSheet = false
+                showUserProfile = true
             }
+        )
+    }
+
+    // Modal User Profile & Firebase Integration Sheet
+    if (showUserProfile) {
+        UserProfileSheet(
+            authManager = communityRepo.authManager,
+            onDismiss = { showUserProfile = false }
         )
     }
 
@@ -573,6 +726,22 @@ fun HomeScreen(
             }
         }
     }
+
+    // Modal Update Available Dialog
+    if (showUpdateDialog && pendingUpdateInfo != null) {
+        UpdateDialog(
+            updateInfo = pendingUpdateInfo!!,
+            onDismiss = { showUpdateDialog = false },
+            onDownloadInstall = {
+                UpdateManager.startDownloadAndInstall(context, pendingUpdateInfo!!)
+                showUpdateDialog = false
+            },
+            onOpenGitHub = {
+                UpdateManager.openInBrowser(context, pendingUpdateInfo!!.htmlUrl)
+                showUpdateDialog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -597,7 +766,7 @@ private fun HeroWallpaperCard(
         ) {
             // Background image with dark gradient
             AsyncImage(
-                model = wallpaper.thumbnailUri,
+                model = WallpaperColorHelper.resolveCoilModel(wallpaper.thumbnailUri),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()

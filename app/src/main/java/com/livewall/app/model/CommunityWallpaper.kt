@@ -12,7 +12,7 @@ data class CommunityWallpaper(
     val id: String = "",
     val title: String = "",
     val authorId: String = "",
-    val authorName: String = "LiveWall Creator",
+    val authorName: String = "Nova Creator",
     val videoUrl: String = "",
     val thumbnailUrl: String = "",
     val primaryColorHex: String = "#1E88E5",

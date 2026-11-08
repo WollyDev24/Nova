@@ -61,6 +61,22 @@ class WallpaperPreferences(private val context: Context) {
         get() = prefs.getString(KEY_SELECTED_TITLE, WallpaperItem.DEFAULT_WALLPAPER.title)!!
         set(value) = prefs.edit().putString(KEY_SELECTED_TITLE, value).apply()
 
+    var googleWebClientId: String?
+        get() = prefs.getString(KEY_GOOGLE_WEB_CLIENT_ID, null)
+        set(value) = prefs.edit().putString(KEY_GOOGLE_WEB_CLIENT_ID, value).apply()
+
+    var customDisplayName: String?
+        get() = prefs.getString(KEY_CUSTOM_DISPLAY_NAME, null)
+        set(value) = prefs.edit().putString(KEY_CUSTOM_DISPLAY_NAME, value).apply()
+
+    var customPhotoUrl: String?
+        get() = prefs.getString(KEY_CUSTOM_PHOTO_URL, null)
+        set(value) = prefs.edit().putString(KEY_CUSTOM_PHOTO_URL, value).apply()
+
+    var autoCheckUpdates: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, value).apply()
+
     fun selectWallpaper(item: WallpaperItem) {
         prefs.edit()
             .putString(KEY_SELECTED_ID, item.id)
@@ -143,5 +159,9 @@ class WallpaperPreferences(private val context: Context) {
         const val KEY_SELECTED_URI = "selected_wallpaper_uri"
         const val KEY_SELECTED_TITLE = "selected_wallpaper_title"
         const val KEY_CUSTOM_WALLPAPERS = "custom_wallpapers"
+        const val KEY_GOOGLE_WEB_CLIENT_ID = "google_web_client_id"
+        const val KEY_CUSTOM_DISPLAY_NAME = "custom_display_name"
+        const val KEY_CUSTOM_PHOTO_URL = "custom_photo_url"
+        const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
     }
 }

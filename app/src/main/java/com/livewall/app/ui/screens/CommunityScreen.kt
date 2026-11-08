@@ -1,5 +1,6 @@
 package com.livewall.app.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,12 +20,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,8 +45,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,16 +83,22 @@ enum class CommunityFeedFilter(
 @Composable
 fun CommunityScreen(
     repository: CommunityRepository,
-    onWallpaperSelected: (CommunityWallpaper) -> Unit,
+    onWallpaperSelected: (CommunityWallpaper, List<CommunityWallpaper>) -> Unit,
     onOpenUpload: () -> Unit,
+    onOpenProfile: () -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(0.dp),
     searchQuery: String = ""
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val currentUser by repository.authManager.authStateFlow.collectAsState(initial = repository.authManager.currentUser)
+    val isGoogleUser = currentUser != null && !currentUser!!.isAnonymous
 
     var activeFilter by remember { mutableStateOf(CommunityFeedFilter.TRENDING) }
     var isLoading by remember { mutableStateOf(false) }
+    var isOfflineOrDemo by remember { mutableStateOf(false) }
     var wallpapers by remember { mutableStateOf<List<CommunityWallpaper>>(emptyList()) }
+    var wallpaperToDelete by remember { mutableStateOf<CommunityWallpaper?>(null) }
     val likedMap = remember { mutableStateMapOf<String, Boolean>() }
 
     fun loadWallpapers() {
@@ -97,16 +111,19 @@ fun CommunityScreen(
             }
 
             result.onSuccess { list ->
-                wallpapers = if (list.isNotEmpty()) {
-                    list
+                if (list.isNotEmpty()) {
+                    wallpapers = list
+                    isOfflineOrDemo = false
                 } else {
                     // Seeded fallback demonstration cards if Firestore collection is newly created
-                    DEMO_COMMUNITY_WALLPAPERS
+                    wallpapers = DEMO_COMMUNITY_WALLPAPERS
+                    isOfflineOrDemo = false
                 }
                 isLoading = false
             }.onFailure {
                 // If offline or Firebase credentials pending, show high quality demo cards
                 wallpapers = DEMO_COMMUNITY_WALLPAPERS
+                isOfflineOrDemo = true
                 isLoading = false
             }
         }
@@ -178,6 +195,86 @@ fun CommunityScreen(
             }
         }
 
+        // Guest sign-in prompt banner
+        if (!isGoogleUser) {
+            item {
+                Surface(
+                    shape = ShapeCard,
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AccountCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Sign in to Community",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Publish live wallpapers under your name and sync likes.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = onOpenProfile,
+                            shape = ShapePill
+                        ) {
+                            Text("Sign In", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Offline / Demo notice banner
+        if (isOfflineOrDemo) {
+            item {
+                Surface(
+                    shape = ShapeCard,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Showing demo feed • Firebase setup pending",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = onOpenProfile) {
+                            Text("Configure", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
         // Loading Indicator
         if (isLoading) {
             item {
@@ -205,10 +302,13 @@ fun CommunityScreen(
                 ) {
                     rowWallpapers.forEach { item ->
                         val isLiked = likedMap[item.id] ?: false
+                        val isAuthor = currentUser?.uid != null && currentUser?.uid == item.authorId
                         Box(modifier = Modifier.weight(1f)) {
                             CommunityWallpaperCard(
                                 wallpaper = item,
                                 isLiked = isLiked,
+                                isAuthor = isAuthor,
+                                onDeleteClick = if (isAuthor) { { wallpaperToDelete = item } } else null,
                                 onLikeClick = {
                                     val nowLiked = !isLiked
                                     likedMap[item.id] = nowLiked
@@ -216,7 +316,7 @@ fun CommunityScreen(
                                         repository.toggleLike(item.id)
                                     }
                                 },
-                                onClick = { onWallpaperSelected(item) }
+                                onClick = { onWallpaperSelected(item, filteredList) }
                             )
                         }
                     }
@@ -273,6 +373,51 @@ fun CommunityScreen(
                 }
             }
         }
+    }
+
+    // Confirmation dialog for deleting an uploaded wallpaper
+    wallpaperToDelete?.let { targetItem ->
+        AlertDialog(
+            onDismissRequest = { wallpaperToDelete = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.DeleteOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = {
+                Text("Delete Wallpaper?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("Are you sure you want to delete \"${targetItem.title}\"? This action cannot be undone.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val toDelete = targetItem
+                        wallpaperToDelete = null
+                        scope.launch {
+                            val res = repository.deleteWallpaper(toDelete.id)
+                            res.onSuccess {
+                                Toast.makeText(context, "Deleted \"${toDelete.title}\"", Toast.LENGTH_SHORT).show()
+                                loadWallpapers()
+                            }.onFailure { err ->
+                                Toast.makeText(context, "Delete failed: ${err.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { wallpaperToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

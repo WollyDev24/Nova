@@ -65,8 +65,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
@@ -127,21 +130,25 @@ fun PreviewSheet(
                 val isCurrent = page == pagerState.currentPage
 
                 Box(modifier = Modifier.fillMaxSize()) {
+                    // High-res static thumbnail displayed immediately and acts as backdrop while video loads
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(WallpaperColorHelper.resolveCoilModel(item.thumbnailUri))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
                     if (isCurrent) {
                         VideoPlayerView(
                             videoUri = item.videoUri,
                             scalingMode = ScalingMode.CROP,
                             isMuted = true,
                             autoPlay = true,
+                            repeatMode = Player.REPEAT_MODE_OFF,
                             onPlayerReady = { playerInstance = it },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        // High-res static thumbnail for adjacent pages while swiping
-                        AsyncImage(
-                            model = item.thumbnailUri,
-                            contentDescription = item.title,
-                            contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

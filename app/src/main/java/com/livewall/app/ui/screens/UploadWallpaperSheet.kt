@@ -77,22 +77,38 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
+import androidx.compose.runtime.collectAsState
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material3.TextButton
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UploadWallpaperSheet(
     repository: CommunityRepository,
     onDismiss: () -> Unit,
-    onUploaded: (CommunityWallpaper) -> Unit
+    onUploaded: (CommunityWallpaper) -> Unit,
+    onOpenProfile: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val authManager = repository.authManager
+
+    val currentUser by authManager.authStateFlow.collectAsState(initial = authManager.currentUser)
+    val profileVersion by authManager.profileVersionFlow.collectAsState()
+    val isGoogleUser = currentUser != null && !currentUser!!.isAnonymous
 
     var selectedVideoUri by remember { mutableStateOf<Uri?>(null) }
     var thumbnailBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var title by remember { mutableStateOf("") }
-    var authorName by remember { mutableStateOf("") }
+    var authorName by remember(currentUser, profileVersion) {
+        mutableStateOf(authManager.getEffectiveDisplayName(context))
+    }
     var durationSec by remember { mutableFloatStateOf(3.0f) }
     var primaryColor by remember { mutableStateOf(Color(0xFF1E88E5)) }
     var secondaryColor by remember { mutableStateOf(Color(0xFF90CAF9)) }
@@ -192,6 +208,63 @@ fun UploadWallpaperSheet(
 
                 FilledTonalIconButton(onClick = onDismiss, shape = CircleShape) {
                     Icon(imageVector = Icons.Rounded.Close, contentDescription = "Close")
+                }
+            }
+
+            // Creator Profile Status
+            Surface(
+                shape = ShapeCard,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val photoUrl = authManager.getPhotoUrl(currentUser)
+                    if (isGoogleUser && photoUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(photoUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (isGoogleUser) Icons.Rounded.AccountCircle else Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = if (isGoogleUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isGoogleUser) authManager.getEffectiveDisplayName(context) else "Publishing as Guest",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isGoogleUser) "Verified Google Creator" else "Sign in to associate creations with your profile",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (!isGoogleUser) {
+                        TextButton(onClick = onOpenProfile) {
+                            Text("Sign In", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
 
@@ -336,7 +409,20 @@ fun UploadWallpaperSheet(
                     scope.launch(Dispatchers.IO) {
                         try {
                             val baos = ByteArrayOutputStream()
-                            thumbnailBitmap?.compress(Bitmap.CompressFormat.WEBP, 85, baos)
+                            val originalBmp = thumbnailBitmap
+                            val scaledThumb = if (originalBmp != null) {
+                                val maxW = 400
+                                if (originalBmp.width > maxW) {
+                                    val aspect = originalBmp.height.toFloat() / originalBmp.width.toFloat()
+                                    Bitmap.createScaledBitmap(originalBmp, maxW, (maxW * aspect).toInt(), true)
+                                } else {
+                                    originalBmp
+                                }
+                            } else null
+                            scaledThumb?.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+                            if (scaledThumb != null && scaledThumb != originalBmp) {
+                                scaledThumb.recycle()
+                            }
                             val thumbBytes = baos.toByteArray()
 
                             val primaryHex = "#%06X".format(0xFFFFFF and primaryColor.hashCode())
@@ -351,6 +437,7 @@ fun UploadWallpaperSheet(
                                 secondaryHex = secondaryHex,
                                 tertiaryHex = tertiaryHex,
                                 durationSec = durationSec,
+                                authorName = authorName,
                                 tags = listOf("community", "user_upload")
                             )
 

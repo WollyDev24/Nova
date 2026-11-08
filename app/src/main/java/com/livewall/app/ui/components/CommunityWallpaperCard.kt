@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -46,6 +47,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.livewall.app.model.CommunityWallpaper
+import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.theme.ShapeCard
 import com.livewall.app.ui.theme.ShapePill
 
@@ -55,7 +57,9 @@ fun CommunityWallpaperCard(
     isLiked: Boolean,
     onLikeClick: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isAuthor: Boolean = false,
+    onDeleteClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val primaryColor = try {
@@ -89,11 +93,19 @@ fun CommunityWallpaperCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.68f)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            primaryColor.copy(alpha = 0.55f),
+                            Color(0xFF141720)
+                        )
+                    )
+                )
         ) {
             // Wallpaper Thumbnail
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(wallpaper.thumbnailUrl)
+                    .data(WallpaperColorHelper.resolveCoilModel(wallpaper.thumbnailUrl))
                     .crossfade(true)
                     .build(),
                 contentDescription = wallpaper.title,
@@ -171,24 +183,49 @@ fun CommunityWallpaperCard(
                     }
                 }
 
-                // Heart / Like Interactive Button
-                Surface(
-                    shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.65f),
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onLikeClick)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                            contentDescription = "Like",
-                            tint = heartColor,
+                    if (isAuthor && onDeleteClick != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.65f),
                             modifier = Modifier
-                                .size(16.dp)
-                                .scale(heartScale)
-                        )
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .clickable(onClick = onDeleteClick)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DeleteOutline,
+                                    contentDescription = "Delete upload",
+                                    tint = Color(0xFFFF5252),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Heart / Like Interactive Button
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.65f),
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onLikeClick)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = "Like",
+                                tint = heartColor,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .scale(heartScale)
+                            )
+                        }
                     }
                 }
             }

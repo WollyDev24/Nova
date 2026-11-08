@@ -163,10 +163,37 @@ object WallpaperColorHelper {
         }
     }
 
+    /**
+     * Resolves an image model for Coil AsyncImage that seamlessly handles
+     * base64 data URIs, assets, files, and remote URLs without decoding errors.
+     */
+    fun resolveCoilModel(thumbUri: String?): Any? {
+        if (thumbUri.isNullOrBlank()) return null
+        if (thumbUri.startsWith("data:image/")) {
+            return try {
+                val base64Data = if (thumbUri.contains("base64,")) {
+                    thumbUri.substringAfter("base64,")
+                } else {
+                    thumbUri.substringAfter(',')
+                }
+                android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode base64 data URI for Coil", e)
+                thumbUri
+            }
+        }
+        return thumbUri
+    }
+
     fun loadThumbnailBitmap(context: Context, thumbUri: String?): Bitmap? {
         if (thumbUri.isNullOrBlank()) return null
         return try {
             when {
+                thumbUri.startsWith("data:image/") -> {
+                    val base64Data = thumbUri.substringAfter("base64,")
+                    val bytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                }
                 thumbUri.startsWith("file:///android_asset/") -> {
                     val assetPath = thumbUri.removePrefix("file:///android_asset/")
                     context.assets.open(assetPath).use { BitmapFactory.decodeStream(it) }
