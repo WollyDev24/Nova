@@ -77,12 +77,12 @@ fun CommunityScreen(
     repository: CommunityRepository,
     onWallpaperSelected: (CommunityWallpaper) -> Unit,
     onOpenUpload: () -> Unit,
-    contentPadding: PaddingValues = PaddingValues(0.dp)
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    searchQuery: String = ""
 ) {
     val scope = rememberCoroutineScope()
 
     var activeFilter by remember { mutableStateOf(CommunityFeedFilter.TRENDING) }
-    var searchQuery by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var wallpapers by remember { mutableStateOf<List<CommunityWallpaper>>(emptyList()) }
     val likedMap = remember { mutableStateMapOf<String, Boolean>() }
@@ -132,76 +132,48 @@ fun CommunityScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Search & Filter Header
+        // Filter Chips Row
         item {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Search Bar
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search community wallpapers...") },
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Rounded.Search, contentDescription = "Search")
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { loadWallpapers() }) {
-                            Icon(imageVector = Icons.Rounded.Refresh, contentDescription = "Refresh")
-                        }
-                    },
-                    singleLine = true,
-                    shape = ShapePill,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                    )
-                )
-
-                // Filter Chips Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CommunityFeedFilter.entries.forEach { filter ->
-                        val selected = activeFilter == filter
-                        ElevatedFilterChip(
-                            selected = selected,
-                            onClick = { activeFilter = filter },
-                            label = { Text(filter.label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = filter.icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            shape = ShapePill,
-                            colors = FilterChipDefaults.elevatedFilterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                CommunityFeedFilter.entries.forEach { filter ->
+                    val selected = activeFilter == filter
+                    ElevatedFilterChip(
+                        selected = selected,
+                        onClick = { activeFilter = filter },
+                        label = { Text(filter.label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = filter.icon,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
                             )
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    FilledTonalButton(
-                        onClick = onOpenUpload,
+                        },
                         shape = ShapePill,
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Upload", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                        colors = FilterChipDefaults.elevatedFilterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                IconButton(
+                    onClick = { loadWallpapers() },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = "Refresh feed",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

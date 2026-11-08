@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -24,14 +25,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WbSunny
@@ -45,15 +49,21 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import com.livewall.app.ui.components.FloatingNavigationBar
 import com.livewall.app.ui.components.NavDestination
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -131,6 +141,20 @@ fun HomeScreen(
 
     var currentTab by remember { mutableStateOf(MainNavTab.CURATED) }
     var showUploadSheet by remember { mutableStateOf(false) }
+    var isSearchOpen by remember { mutableStateOf(false) }
+    var communitySearchQuery by remember { mutableStateOf("") }
+
+    LaunchedEffect(currentTab) {
+        if (currentTab != MainNavTab.COMMUNITY) {
+            isSearchOpen = false
+            communitySearchQuery = ""
+        }
+    }
+
+    BackHandler(enabled = isSearchOpen) {
+        isSearchOpen = false
+        communitySearchQuery = ""
+    }
 
     var activeWallpaperId by remember { mutableStateOf(prefs.selectedWallpaperId) }
     var activeTrigger by remember { mutableStateOf(prefs.trigger) }
@@ -267,53 +291,119 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "LiveWall",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black
+                    if (isSearchOpen && currentTab == MainNavTab.COMMUNITY) {
+                        val focusRequester = remember { FocusRequester() }
+                        LaunchedEffect(Unit) {
+                            focusRequester.requestFocus()
+                        }
+                        TextField(
+                            value = communitySearchQuery,
+                            onValueChange = { communitySearchQuery = it },
+                            placeholder = {
+                                Text(
+                                    "Search community wallpapers...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            ),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = ShapePill,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        ) {
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (currentTab == MainNavTab.CURATED) "Super Wallpapers" else "Community Hub",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                text = "LiveWall",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = ShapePill,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ) {
+                                Text(
+                                    text = if (currentTab == MainNavTab.CURATED) "Super Wallpapers" else "Community Hub",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                navigationIcon = {
+                    if (isSearchOpen && currentTab == MainNavTab.COMMUNITY) {
+                        IconButton(
+                            onClick = {
+                                isSearchOpen = false
+                                communitySearchQuery = ""
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Close search",
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
                 },
                 actions = {
-                    if (currentTab == MainNavTab.CURATED) {
-                        FilledTonalIconButton(
-                            onClick = {
-                                pickVideoLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                    if (isSearchOpen && currentTab == MainNavTab.COMMUNITY) {
+                        if (communitySearchQuery.isNotEmpty()) {
+                            IconButton(onClick = { communitySearchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Clear search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            },
-                            shape = CircleShape
-                        ) {
-                            Icon(imageVector = Icons.Rounded.Add, contentDescription = "Import Video")
+                            }
                         }
                     } else {
+                        if (currentTab == MainNavTab.CURATED) {
+                            FilledTonalIconButton(
+                                onClick = {
+                                    pickVideoLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                                    )
+                                },
+                                shape = CircleShape
+                            ) {
+                                Icon(imageVector = Icons.Rounded.Add, contentDescription = "Import Video")
+                            }
+                        } else {
+                            FilledTonalIconButton(
+                                onClick = { isSearchOpen = true },
+                                shape = CircleShape
+                            ) {
+                                Icon(imageVector = Icons.Rounded.Search, contentDescription = "Search Community Wallpapers")
+                            }
+                            FilledTonalIconButton(
+                                onClick = { showUploadSheet = true },
+                                shape = CircleShape
+                            ) {
+                                Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = "Publish to Community")
+                            }
+                        }
+
                         FilledTonalIconButton(
-                            onClick = { showUploadSheet = true },
+                            onClick = { showSettings = true },
                             shape = CircleShape
                         ) {
-                            Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = "Publish to Community")
+                            Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
                         }
-                    }
-
-                    FilledTonalIconButton(
-                        onClick = { showSettings = true },
-                        shape = CircleShape
-                    ) {
-                        Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -399,7 +489,8 @@ fun HomeScreen(
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + 8.dp,
                     bottom = innerPadding.calculateBottomPadding() + 12.dp
-                )
+                ),
+                searchQuery = communitySearchQuery
             )
         }
     }
