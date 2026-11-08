@@ -1,0 +1,183 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version Name (e.g. 1.0.1)'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark as Pre-release'
+        type: boolean
+        required: false
+        default: false
+      release_notes:
+        description: 'Custom Release Notes'
+        required: false
+        default: ''
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Set up Google Services configuration
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          elif [ ! -f app/google-services.json ]; then
+            echo "Creating minimal fallback google-services.json for CI..."
+            cat << 'EOF' > app/google-services.json
+          {
+            "project_info": {
+              "project_number": "18387689298",
+              "project_id": "nova-d8a4e",
+              "storage_bucket": "nova-d8a4e.firebasestorage.app"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:18387689298:android:5b14ee42ff4f3c3410648b",
+                  "android_client_info": {
+                    "package_name": "com.livewall.app"
+                  }
+                },
+                "oauth_client": [
+                  {
+                    "client_id": "18387689298-4phk0c10at8il0c289cj33cprim7d8pf.apps.googleusercontent.com",
+                    "client_type": 3
+                  }
+                ],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyDummyKeyForCiBuildsOnly0000000000"
+                  }
+                ],
+                "services": {}
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
+      - name: Set up Android SDK
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" >/dev/null 2>&1 || true
+          fi
+
+      - name: Set up Keystore Signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.jks"
+            printf 'storeFile=%s/keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$RUNNER_TEMP" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+            echo "Keystore signing configured."
+          else
+            echo "No keystore secret detected. Falling back to debug signing config."
+          fi
+
+      - name: Determine Version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            RAW_TAG="${GITHUB_REF#refs/tags/}"
+            VER_NAME="${RAW_TAG#v}"
+            TAG_NAME="$RAW_TAG"
+          elif [ -n "${{ github.event.inputs.version_name }}" ]; then
+            VER_NAME="${{ github.event.inputs.version_name }}"
+            TAG_NAME="v$VER_NAME"
+          else
+            VER_NAME="1.0.${{ github.run_number }}"
+            TAG_NAME="v$VER_NAME"
+          fi
+          VER_CODE=$((1000 + ${{ github.run_number }}))
+          echo "version_name=$VER_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VER_CODE" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "Building Nova $VER_NAME ($VER_CODE) [Tag: $TAG_NAME]"
+
+      - name: Build Release APK
+        run: |
+          ./gradlew assembleRelease \
+            -PversionCode="${{ steps.version.outputs.version_code }}" \
+            -PversionName="${{ steps.version.outputs.version_name }}" \
+            --full-stacktrace
+
+      - name: Prepare Release Artifacts
+        id: artifacts
+        run: |
+          mkdir -p release-apks
+          ORIGINAL_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$ORIGINAL_APK" ]; then
+            echo "Error: Release APK not found!"
+            exit 1
+          fi
+          TARGET_APK="release-apks/Nova-${{ steps.version.outputs.tag_name }}.apk"
+          cp "$ORIGINAL_APK" "$TARGET_APK"
+          echo "apk_path=$TARGET_APK" >> "$GITHUB_OUTPUT"
+          echo "Prepared APK at $TARGET_APK ($(du -h "$TARGET_APK" | cut -f1))"
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: "Nova ${{ steps.version.outputs.tag_name }}"
+          body: |
+            ${{ github.event.inputs.release_notes || '' }}
+            
+            ### Nova ${{ steps.version.outputs.tag_name }}
+            - Release build from commit `${{ github.sha }}`
+            - Full HyperOS and ColorOS OEM Super Wallpapers
+            - Community Hub with online video wallpaper streaming & offline local caching
+          files: ${{ steps.artifacts.outputs.apk_path }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          draft: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nova-${{ steps.version.outputs.tag_name }}
+          path: ${{ steps.artifacts.outputs.apk_path }}
+          if-no-files-found: error
+          retention-days: 30

@@ -1,8 +1,31 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
 }
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
+val signingStoreFile = (keystoreProperties.getProperty("storeFile") ?: System.getenv("ANDROID_KEYSTORE_PATH"))
+    ?.takeIf { it.isNotBlank() }
+val signingStorePassword = (keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD"))
+    ?.takeIf { it.isNotBlank() }
+val signingKeyAlias = (keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS"))
+    ?.takeIf { it.isNotBlank() }
+val signingKeyPassword = (keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD"))
+    ?.takeIf { it.isNotBlank() }
+
+val hasSigningConfig = signingStoreFile != null && signingStorePassword != null &&
+    signingKeyAlias != null && signingKeyPassword != null
+
+val overrideVersionCode = providers.gradleProperty("versionCode").orNull?.toIntOrNull()
+val overrideVersionName = providers.gradleProperty("versionName").orNull
 
 android {
     namespace = "com.livewall.app"
@@ -12,17 +35,28 @@ android {
         applicationId = "com.livewall.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = overrideVersionCode ?: 1
+        versionName = overrideVersionName ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (hasSigningConfig) {
+            create("release") {
+                storeFile = file(signingStoreFile!!)
+                storePassword = signingStorePassword!!
+                keyAlias = signingKeyAlias!!
+                keyPassword = signingKeyPassword!!
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasSigningConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
