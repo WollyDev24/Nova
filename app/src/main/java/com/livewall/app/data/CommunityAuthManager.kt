@@ -213,6 +213,54 @@ class CommunityAuthManager(
     }
 
     /**
+     * Signs in or links account to Firebase using an extracted Google ID token.
+     */
+    suspend fun signInWithGoogleIdToken(
+        idToken: String,
+        displayName: String? = null,
+        photoUri: Uri? = null
+    ): Result<FirebaseUser> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val authCredential = GoogleAuthProvider.getCredential(idToken, null)
+
+            val prevUser = auth.currentUser
+            val result = if (prevUser != null && prevUser.isAnonymous) {
+                try {
+                    prevUser.linkWithCredential(authCredential).await()
+                } catch (_: Exception) {
+                    auth.signInWithCredential(authCredential).await()
+                }
+            } else {
+                auth.signInWithCredential(authCredential).await()
+            }
+
+            val finalUser = result.user ?: throw IllegalStateException("Firebase sign-in yielded null user")
+
+            val pfpUri = photoUri ?: finalUser.providerData.firstNotNullOfOrNull { it.photoUrl }
+            val googleName = displayName ?: finalUser.providerData.firstNotNullOfOrNull { it.displayName }
+
+            val profileUpdates = UserProfileChangeRequest.Builder().apply {
+                if (pfpUri != null) setPhotoUri(pfpUri)
+                if (!googleName.isNullOrBlank() && finalUser.displayName.isNullOrBlank()) {
+                    setDisplayName(googleName)
+                }
+            }.build()
+
+            try {
+                finalUser.updateProfile(profileUpdates).await()
+                finalUser.reload().await()
+                _profileVersionFlow.value += 1
+            } catch (_: Exception) {}
+
+            Result.success(finalUser)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Authenticates with Google using Android Credential Manager (Android 14+ / Google Play Services).
      * Automatically links anonymous credentials or signs into existing account.
      */
@@ -220,66 +268,44 @@ class CommunityAuthManager(
         return try {
             val activityContext = context.findActivity() ?: context
             val credentialManager = CredentialManager.create(activityContext)
+            val cleanClientId = serverClientId.trim()
 
-            val googleIdOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(serverClientId.trim())
-                .setAutoSelectEnabled(false)
-                .build()
-
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
-                .build()
-
-            val response = credentialManager.getCredential(
-                request = request,
-                context = activityContext
-            )
+            // Step 1: Attempt explicit Sign-In with Google option (recommended for explicit button tap)
+            val response = try {
+                val signInOption = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption.Builder(cleanClientId)
+                    .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(signInOption)
+                    .build()
+                credentialManager.getCredential(request = request, context = activityContext)
+            } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+                // Step 2: Fallback to GetGoogleIdOption without account filtering
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(cleanClientId)
+                    .setAutoSelectEnabled(false)
+                    .build()
+                val fallbackRequest = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+                credentialManager.getCredential(request = fallbackRequest, context = activityContext)
+            }
 
             val credential = response.credential
             if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
-                val idToken = googleIdTokenCredential.idToken
-                val authCredential = GoogleAuthProvider.getCredential(idToken, null)
-
-                val prevUser = auth.currentUser
-                val result = if (prevUser != null && prevUser.isAnonymous) {
-                    try {
-                        prevUser.linkWithCredential(authCredential).await()
-                    } catch (_: Exception) {
-                        auth.signInWithCredential(authCredential).await()
-                    }
-                } else {
-                    auth.signInWithCredential(authCredential).await()
-                }
-
-                val finalUser = result.user ?: throw IllegalStateException("Firebase sign-in yielded null user")
-
-                // Sync Google profile picture and display name to Firebase User Profile
-                val pfpUri = googleIdTokenCredential.profilePictureUri ?: finalUser.providerData.firstNotNullOfOrNull { it.photoUrl }
-                val googleName = googleIdTokenCredential.displayName ?: finalUser.providerData.firstNotNullOfOrNull { it.displayName }
-
-                val profileUpdates = UserProfileChangeRequest.Builder().apply {
-                    if (pfpUri != null) setPhotoUri(pfpUri)
-                    if (!googleName.isNullOrBlank() && finalUser.displayName.isNullOrBlank()) {
-                        setDisplayName(googleName)
-                    }
-                }.build()
-
-                try {
-                    finalUser.updateProfile(profileUpdates).await()
-                    finalUser.reload().await()
-                    _profileVersionFlow.value += 1
-                } catch (_: Exception) {}
-
-                Result.success(finalUser)
+                signInWithGoogleIdToken(
+                    idToken = googleIdTokenCredential.idToken,
+                    displayName = googleIdTokenCredential.displayName,
+                    photoUri = googleIdTokenCredential.profilePictureUri
+                )
             } else {
                 Result.failure(IllegalStateException("Unsupported credential type: ${credential.type}"))
             }
         } catch (e: GetCredentialCancellationException) {
             Result.failure(e)
         } catch (e: androidx.credentials.exceptions.NoCredentialException) {
-            Result.failure(IllegalStateException("No credentials available. Verify a Google account is active on this device and the APK signing SHA-1 is registered in Firebase.", e))
+            Result.failure(e)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

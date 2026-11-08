@@ -2,6 +2,8 @@ package com.livewall.app.ui.screens
 
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -74,11 +76,16 @@ import com.livewall.app.ui.theme.ShapeBottomSheet
 import com.livewall.app.ui.theme.ShapeCard
 import com.livewall.app.ui.theme.ShapePill
 import com.livewall.app.util.findActivity
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileSheet(
@@ -104,6 +111,60 @@ fun UserProfileSheet(
         authManager.resolveServerClientId(context)
     }
 
+    val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val appContext = context.applicationContext
+        val authScope = context.findActivity()?.lifecycleScope ?: scope
+        authScope.launch {
+            try {
+                val data = result.data
+                val task = GoogleSignIn.getSignedInAccountFromIntent(data)
+                val account = task.getResult(ApiException::class.java)
+                val idToken = account.idToken
+                if (!idToken.isNullOrBlank()) {
+                    val authResult = authManager.signInWithGoogleIdToken(
+                        idToken = idToken,
+                        displayName = account.displayName,
+                        photoUri = account.photoUrl
+                    )
+                    withContext(Dispatchers.Main) {
+                        isSigningIn = false
+                        authResult.onSuccess { user ->
+                            Toast.makeText(appContext, "Welcome, ${user.displayName ?: "Creator"}!", Toast.LENGTH_SHORT).show()
+                        }.onFailure { err ->
+                            Toast.makeText(appContext, "Sign-in error: ${err.message ?: err.toString()}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        isSigningIn = false
+                        Toast.makeText(appContext, "Sign-in error: No ID token received from Google", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: ApiException) {
+                withContext(Dispatchers.Main) {
+                    isSigningIn = false
+                    if (e.statusCode != CommonStatusCodes.CANCELED && e.statusCode != 12501) {
+                        val reason = when (e.statusCode) {
+                            CommonStatusCodes.DEVELOPER_ERROR -> "DEVELOPER_ERROR (Status 10: Check SHA-1 fingerprint in Firebase Console)"
+                            CommonStatusCodes.NETWORK_ERROR -> "NETWORK_ERROR (Status 7: Check internet connection)"
+                            CommonStatusCodes.SIGN_IN_REQUIRED -> "SIGN_IN_REQUIRED"
+                            12500 -> "SIGN_IN_FAILED (Status 12500: Verify Web Client ID and SHA-1 in Firebase Console)"
+                            else -> "Google Play Services error: status code ${e.statusCode} (${e.localizedMessage ?: "Sign-in failed"})"
+                        }
+                        Toast.makeText(appContext, "Sign-in error: $reason", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    isSigningIn = false
+                    Toast.makeText(appContext, "Sign-in error: ${e.message ?: e.toString()}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     fun triggerGoogleSignIn() {
         val serverClientId = resolvedClientId
         if (serverClientId.isNullOrBlank()) {
@@ -111,34 +172,71 @@ fun UserProfileSheet(
             return
         }
 
-        // Use Activity lifecycleScope so the coroutine is NOT cancelled if ModalBottomSheet
-        // temporarily recomposes, loses window focus, or leaves composition when Credential Manager appears
         val activity = context.findActivity()
         val authScope = activity?.lifecycleScope ?: scope
         val appContext = context.applicationContext
+
+        fun launchLegacyGoogleSignIn() {
+            try {
+                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(serverClientId)
+                    .requestEmail()
+                    .build()
+                val client = GoogleSignIn.getClient(context, gso)
+                client.signOut().addOnCompleteListener {
+                    legacyGoogleSignInLauncher.launch(client.signInIntent)
+                }
+            } catch (e: Exception) {
+                isSigningIn = false
+                Toast.makeText(appContext, "Failed to launch Google Sign-In: ${e.message ?: e.toString()}", Toast.LENGTH_LONG).show()
+            }
+        }
 
         isSigningIn = true
         authScope.launch {
             try {
                 val result = authManager.signInWithGoogle(context, serverClientId)
                 withContext(Dispatchers.Main) {
-                    isSigningIn = false
                     result.onSuccess { user ->
+                        isSigningIn = false
                         Toast.makeText(
                             appContext,
                             "Welcome, ${user.displayName ?: "Creator"}!",
                             Toast.LENGTH_SHORT
                         ).show()
                     }.onFailure { err ->
-                        if (err !is androidx.credentials.exceptions.GetCredentialCancellationException && err !is CancellationException) {
+                        if (err is androidx.credentials.exceptions.NoCredentialException ||
+                            err is androidx.credentials.exceptions.GetCredentialException) {
+                            // Seamless fallback to Google Play Services Account Chooser
+                            launchLegacyGoogleSignIn()
+                        } else if (err !is androidx.credentials.exceptions.GetCredentialCancellationException && err !is CancellationException) {
+                            isSigningIn = false
                             val msg = err.message ?: err.toString()
                             Toast.makeText(appContext, "Sign-in error: $msg", Toast.LENGTH_LONG).show()
+                        } else {
+                            isSigningIn = false
                         }
+                    }
+                }
+            } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+                withContext(Dispatchers.Main) {
+                    launchLegacyGoogleSignIn()
+                }
+            } catch (e: androidx.credentials.exceptions.GetCredentialException) {
+                withContext(Dispatchers.Main) {
+                    if (e is androidx.credentials.exceptions.GetCredentialCancellationException) {
+                        isSigningIn = false
+                    } else {
+                        launchLegacyGoogleSignIn()
                     }
                 }
             } catch (_: CancellationException) {
                 withContext(Dispatchers.Main) {
                     isSigningIn = false
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    launchLegacyGoogleSignIn()
                 }
             }
         }
