@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +70,9 @@ fun FloatingNavigationBar(
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
+    val currentTabState by rememberUpdatedState(currentTab)
+    val onSelectState by rememberUpdatedState(onSelect)
+
     var itemRects by remember { mutableStateOf<Map<Int, IntRect>>(emptyMap()) }
     var dragX by remember { mutableStateOf<Float?>(null) }
     var dragIndex by remember { mutableStateOf<Int?>(null) }
@@ -137,7 +141,7 @@ fun FloatingNavigationBar(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .pointerInput(destinations.size) {
+                        .pointerInput(Unit) {
                             detectHorizontalDragGestures(
                                 onDragStart = { offset ->
                                     dragX = offset.x
@@ -146,6 +150,7 @@ fun FloatingNavigationBar(
                                     lastDragHapticIndex = index
                                 },
                                 onHorizontalDrag = { change, _ ->
+                                    change.consume()
                                     dragX = change.position.x
                                     val index = nearestIndex(change.position.x)
                                     if (index != null && index != lastDragHapticIndex) {
@@ -155,13 +160,11 @@ fun FloatingNavigationBar(
                                     dragIndex = index
                                 },
                                 onDragEnd = {
-                                    dragX?.let { x ->
-                                        nearestIndex(x)?.let { index ->
-                                            if (index != currentTab) {
-                                                haptics.feedback(HapticFeedbackType.LongPress)
-                                                onSelect(index)
-                                            }
-                                        }
+                                    val finalX = dragX
+                                    val finalIndex = finalX?.let { nearestIndex(it) } ?: currentTabState
+                                    if (finalIndex != currentTabState) {
+                                        haptics.feedback(HapticFeedbackType.LongPress)
+                                        onSelectState(finalIndex)
                                     }
                                     dragX = null
                                     dragIndex = null
@@ -196,7 +199,7 @@ fun FloatingNavigationBar(
                                     dragIndex = null
                                     lastDragHapticIndex = null
                                     haptics.feedback(HapticFeedbackType.LongPress)
-                                    onSelect(index)
+                                    onSelectState(index)
                                 }
                                 .onGloballyPositioned { coordinates ->
                                     val bounds = coordinates.boundsInParent()
