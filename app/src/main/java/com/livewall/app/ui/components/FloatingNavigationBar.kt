@@ -23,7 +23,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +57,7 @@ data class NavDestination(
 )
 
 /**
- * Expressive floating pill navigation bar from Astra with horizontal drag gesture tracking,
+ * Expressive floating pill navigation bar with horizontal drag gesture tracking,
  * spring-based sliding indicator, and haptic feedback.
  */
 @Composable
@@ -78,13 +77,8 @@ fun FloatingNavigationBar(
     fun nearestIndex(x: Float): Int? =
         itemRects.minByOrNull { (_, r) -> abs((r.left + r.width / 2f) - x) }?.key
 
-    LaunchedEffect(currentTab) {
-        if (dragIndex != null && currentTab == dragIndex) {
-            dragIndex = null
-        }
-    }
-
-    val highlightIndex = dragIndex ?: currentTab
+    // When actively dragging, follow dragIndex; otherwise always reliably follow currentTab
+    val highlightIndex = if (dragX != null) (dragIndex ?: currentTab) else currentTab
 
     Box(
         modifier = modifier
@@ -143,7 +137,7 @@ fun FloatingNavigationBar(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .pointerInput(Unit) {
+                        .pointerInput(destinations.size) {
                             detectHorizontalDragGestures(
                                 onDragStart = { offset ->
                                     dragX = offset.x
@@ -154,7 +148,7 @@ fun FloatingNavigationBar(
                                 onHorizontalDrag = { change, _ ->
                                     dragX = change.position.x
                                     val index = nearestIndex(change.position.x)
-                                    if (index != lastDragHapticIndex) {
+                                    if (index != null && index != lastDragHapticIndex) {
                                         lastDragHapticIndex = index
                                         haptics.feedback(HapticFeedbackType.TextHandleMove)
                                     }
@@ -162,11 +156,15 @@ fun FloatingNavigationBar(
                                 },
                                 onDragEnd = {
                                     dragX?.let { x ->
-                                        val index = nearestIndex(x)
-                                        dragIndex = index
-                                        index?.let(onSelect)
+                                        nearestIndex(x)?.let { index ->
+                                            if (index != currentTab) {
+                                                haptics.feedback(HapticFeedbackType.LongPress)
+                                                onSelect(index)
+                                            }
+                                        }
                                     }
                                     dragX = null
+                                    dragIndex = null
                                     lastDragHapticIndex = null
                                 },
                                 onDragCancel = {
@@ -194,17 +192,23 @@ fun FloatingNavigationBar(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
                                 ) {
+                                    dragX = null
+                                    dragIndex = null
+                                    lastDragHapticIndex = null
                                     haptics.feedback(HapticFeedbackType.LongPress)
                                     onSelect(index)
                                 }
-                                .onGloballyPositioned {
-                                    val bounds = it.boundsInParent()
-                                    itemRects = itemRects + (index to IntRect(
+                                .onGloballyPositioned { coordinates ->
+                                    val bounds = coordinates.boundsInParent()
+                                    val rect = IntRect(
                                         bounds.left.toInt(),
                                         bounds.top.toInt(),
                                         bounds.right.toInt(),
                                         bounds.bottom.toInt()
-                                    ))
+                                    )
+                                    if (itemRects[index] != rect) {
+                                        itemRects = itemRects + (index to rect)
+                                    }
                                 }
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
