@@ -38,3 +38,6 @@ keystore.properties
 
 # Android Profiling
 *.hprof
+
+# Compression script outputs
+results/
