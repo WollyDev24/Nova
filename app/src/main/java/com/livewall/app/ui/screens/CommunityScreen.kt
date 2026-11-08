@@ -57,14 +57,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.livewall.app.data.CommunityRepository
 import com.livewall.app.model.CommunityWallpaper
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.livewall.app.ui.components.CommunityWallpaperCard
 import com.livewall.app.ui.theme.ShapeCard
 import com.livewall.app.ui.theme.ShapePill
 import kotlinx.coroutines.launch
 
-enum class CommunityFeedFilter(val label: String) {
-    TRENDING("Trending 🔥"),
-    LATEST("Newest ✨")
+enum class CommunityFeedFilter(
+    val label: String,
+    val icon: ImageVector
+) {
+    TRENDING("Trending", Icons.Rounded.LocalFireDepartment),
+    LATEST("Newest", Icons.Rounded.AutoAwesome)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -171,10 +175,18 @@ fun CommunityScreen(
                             selected = selected,
                             onClick = { activeFilter = filter },
                             label = { Text(filter.label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = filter.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
                             shape = ShapePill,
                             colors = FilterChipDefaults.elevatedFilterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         )
                     }
