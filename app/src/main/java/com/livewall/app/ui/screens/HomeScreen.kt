@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
@@ -43,6 +44,9 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -65,9 +69,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.livewall.app.data.CommunityRepository
 import com.livewall.app.data.CustomWallpaperManager
 import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.WallpaperPreferences
+import com.livewall.app.model.CommunityWallpaper
 import com.livewall.app.model.WallpaperItem
 import com.livewall.app.service.LiveWallpaperService
 import com.livewall.app.service.WallpaperColorHelper
@@ -79,6 +85,9 @@ import com.livewall.app.ui.theme.ShapePill
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.net.URL
 
 data class CollectionItem(
     val id: String,
@@ -88,6 +97,11 @@ data class CollectionItem(
     val items: List<WallpaperItem>
 )
 
+enum class MainNavTab(val label: String) {
+    CURATED("Curated OEM"),
+    COMMUNITY("Community Hub")
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HomeScreen(
@@ -96,6 +110,10 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val communityRepo = remember { CommunityRepository(context) }
+
+    var currentTab by remember { mutableStateOf(MainNavTab.CURATED) }
+    var showUploadSheet by remember { mutableStateOf(false) }
 
     var activeWallpaperId by remember { mutableStateOf(prefs.selectedWallpaperId) }
     var activeTrigger by remember { mutableStateOf(prefs.trigger) }
@@ -174,6 +192,35 @@ fun HomeScreen(
     }
 
     fun applyLiveWallpaper(item: WallpaperItem) {
+        if (item.videoUri.startsWith("http://") || item.videoUri.startsWith("https://")) {
+            Toast.makeText(context, "Downloading community wallpaper...", Toast.LENGTH_SHORT).show()
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val communityDir = File(context.filesDir, "community_videos").apply { mkdirs() }
+                    val destinationFile = File(communityDir, "${item.id}.mp4")
+                    if (!destinationFile.exists() || destinationFile.length() == 0L) {
+                        val connection = URL(item.videoUri).openConnection()
+                        connection.connectTimeout = 15_000
+                        connection.readTimeout = 30_000
+                        connection.getInputStream().use { input ->
+                            FileOutputStream(destinationFile).use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                    }
+                    val localItem = item.copy(videoUri = destinationFile.absolutePath)
+                    withContext(Dispatchers.Main) {
+                        applyLiveWallpaper(localItem)
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            return
+        }
+
         prefs.selectWallpaper(item)
         activeWallpaperId = item.id
         // Sync static bitmap in background for Samsung One UI & system Color Palette
@@ -201,41 +248,74 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "LiveWall",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Black
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = ShapePill,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "LiveWall",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = ShapePill,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ) {
+                                Text(
+                                    text = if (currentTab == MainNavTab.CURATED) "Super Wallpapers" else "Community Hub",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        FilledTonalIconButton(
+                            onClick = { showSettings = true },
+                            shape = CircleShape
+                        ) {
+                            Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+
+                // Expressive Segmented Tabs between Curated OEM & Community Hub
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 8.dp)
+                ) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = currentTab == MainNavTab.CURATED,
+                            onClick = { currentTab = MainNavTab.CURATED },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                         ) {
                             Text(
-                                text = "Super Wallpapers",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                "Curated OEM",
+                                fontWeight = if (currentTab == MainNavTab.CURATED) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                        SegmentedButton(
+                            selected = currentTab == MainNavTab.COMMUNITY,
+                            onClick = { currentTab = MainNavTab.COMMUNITY },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) {
+                            Text(
+                                "Community Hub",
+                                fontWeight = if (currentTab == MainNavTab.COMMUNITY) FontWeight.Bold else FontWeight.Medium
                             )
                         }
                     }
-                },
-                actions = {
-                    FilledTonalIconButton(
-                        onClick = { showSettings = true },
-                        shape = CircleShape
-                    ) {
-                        Icon(imageVector = Icons.Rounded.Settings, contentDescription = "Settings")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+                }
+            }
         },
         bottomBar = {
             // Floating Toolbar per guidelines §7.1
@@ -256,93 +336,124 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        FilledTonalButton(
-                            onClick = {
-                                pickVideoLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-                                )
-                            },
-                            shape = ShapePill,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
-                        ) {
-                            Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Import Video", fontWeight = FontWeight.SemiBold)
-                        }
+                        if (currentTab == MainNavTab.CURATED) {
+                            FilledTonalButton(
+                                onClick = {
+                                    pickVideoLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                                    )
+                                },
+                                shape = ShapePill,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Import Video", fontWeight = FontWeight.SemiBold)
+                            }
 
-                        Button(
-                            onClick = { applyLiveWallpaper(activeWallpaper) },
-                            shape = ShapePill,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
-                        ) {
-                            Icon(imageVector = Icons.Rounded.Wallpaper, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Set Live Wallpaper", fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = { applyLiveWallpaper(activeWallpaper) },
+                                shape = ShapePill,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                            ) {
+                                Icon(imageVector = Icons.Rounded.Wallpaper, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Set Live Wallpaper", fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Button(
+                                onClick = { showUploadSheet = true },
+                                shape = ShapePill,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ),
+                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                            ) {
+                                Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Publish to Community", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
             }
         }
     ) { innerPadding ->
-        // Clean, uncluttered Home layout with Collections Banner Cards
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding() + 8.dp,
-                bottom = innerPadding.calculateBottomPadding() + 88.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Active Wallpaper Showcase
-            item {
-                HeroWallpaperCard(
-                    wallpaper = activeWallpaper,
-                    trigger = activeTrigger,
-                    onPreviewClick = { previewWallpaper = activeWallpaper }
-                )
-            }
-
-            // Section Header: Collections
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Collections",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+        if (currentTab == MainNavTab.CURATED) {
+            // Clean, uncluttered Home layout with Collections Banner Cards
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 8.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 88.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Active Wallpaper Showcase
+                item {
+                    HeroWallpaperCard(
+                        wallpaper = activeWallpaper,
+                        trigger = activeTrigger,
+                        onPreviewClick = { previewWallpaper = activeWallpaper }
                     )
-                    Text(
-                        text = "${collections.size} Categories",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                }
+
+                // Section Header: Collections
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Collections",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "${collections.size} Categories",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Stacked Collection Banner Cards (e.g. "ColorOS", "Xiaomi 18 Pro Max", etc.)
+                items(collections.size, key = { collections[it].id }) { index ->
+                    val col = collections[index]
+                    CollectionBannerCard(
+                        collectionName = col.name,
+                        subtitle = col.subtitle,
+                        coverImageUri = col.coverUri,
+                        wallpaperCount = col.items.size,
+                        containsActive = col.items.any { it.id == activeWallpaperId },
+                        onClick = { selectedCollection = col }
                     )
                 }
             }
-
-            // Stacked Collection Banner Cards (e.g. "ColorOS", "Xiaomi 18 Pro Max", etc.)
-            items(collections.size, key = { collections[it].id }) { index ->
-                val col = collections[index]
-                CollectionBannerCard(
-                    collectionName = col.name,
-                    subtitle = col.subtitle,
-                    coverImageUri = col.coverUri,
-                    wallpaperCount = col.items.size,
-                    containsActive = col.items.any { it.id == activeWallpaperId },
-                    onClick = { selectedCollection = col }
+        } else {
+            // Community Hub Feed
+            CommunityScreen(
+                repository = communityRepo,
+                onWallpaperSelected = { communityItem ->
+                    previewWallpaper = communityItem.toWallpaperItem()
+                },
+                onOpenUpload = { showUploadSheet = true },
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 8.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 88.dp
                 )
-            }
+            )
         }
     }
 
@@ -384,6 +495,18 @@ fun HomeScreen(
             onDismiss = {
                 showSettings = false
                 activeTrigger = prefs.trigger
+            }
+        )
+    }
+
+    // Modal Upload to Community Sheet
+    if (showUploadSheet) {
+        UploadWallpaperSheet(
+            repository = communityRepo,
+            onDismiss = { showUploadSheet = false },
+            onUploaded = { newWallpaper ->
+                showUploadSheet = false
+                previewWallpaper = newWallpaper.toWallpaperItem()
             }
         )
     }
