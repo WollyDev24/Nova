@@ -189,6 +189,7 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
     print(f"  • Encoding forward video  -> {dest_forward_video.relative_to(REPO_ROOT)}")
     run_cmd([
         "ffmpeg", "-y", "-i", str(video_file),
+        "-vf", "null",
         "-c:v", "libx265", "-crf", "24", "-preset", "medium",
         "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1",
         "-an", "-movflags", "+faststart",

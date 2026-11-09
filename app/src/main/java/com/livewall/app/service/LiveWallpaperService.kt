@@ -246,7 +246,9 @@ open class LiveWallpaperService : WallpaperService() {
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
             currentSurfaceHolder = holder
+            val scaling = getDesiredScalingMode()
             forwardPlayer?.setVideoSurface(holder.surface)
+            forwardPlayer?.videoScalingMode = scaling
             setSurfaceFrameRate(120f)
             updateWallpaperColors()
             if (isPreview) {
@@ -360,6 +362,14 @@ open class LiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun getDesiredScalingMode(): Int {
+            return if (prefs.scalingMode == ScalingMode.CROP) {
+                C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            } else {
+                C.VIDEO_SCALING_MODE_SCALE_TO_FIT
+            }
+        }
+
         private fun getReverseUri(forwardUriStr: String): String? {
             return WallpaperDownloader.getPlayableReverseUri(applicationContext, forwardUriStr)
         }
@@ -387,7 +397,9 @@ open class LiveWallpaperService : WallpaperService() {
                     Log.d(tag, "Transferring surface back to forwardPlayer at fwdPos $fwdPos")
                     rp.pause()
                     rp.clearVideoSurface()
+                    val scaling = getDesiredScalingMode()
                     fp.setVideoSurface(surface)
+                    fp.videoScalingMode = scaling
                     fp.seekTo(fwdPos)
                 }
                 setSurfaceFrameRate(120f)
@@ -409,7 +421,9 @@ open class LiveWallpaperService : WallpaperService() {
                 rp.clearVideoSurface()
             }
             if (fp != null && surface != null && surface.isValid) {
+                val scaling = getDesiredScalingMode()
                 fp.setVideoSurface(surface)
+                fp.videoScalingMode = scaling
                 fp.seekTo(0)
                 fp.pause()
             }
@@ -452,7 +466,9 @@ open class LiveWallpaperService : WallpaperService() {
                 Log.d(tag, "Instant surface transfer to reversePlayer at $revStartPos")
                 fp.pause()
                 fp.clearVideoSurface()
+                val scaling = getDesiredScalingMode()
                 rp.setVideoSurface(surface)
+                rp.videoScalingMode = scaling
                 rp.seekTo(revStartPos)
                 rp.play()
 
@@ -558,6 +574,7 @@ open class LiveWallpaperService : WallpaperService() {
             }
             if (surface != null && surface.isValid) {
                 fp.setVideoSurface(surface)
+                fp.videoScalingMode = getDesiredScalingMode()
                 fp.seekTo(0)
                 fp.play()
                 return true
