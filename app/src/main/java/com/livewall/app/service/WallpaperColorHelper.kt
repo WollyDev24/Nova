@@ -76,6 +76,14 @@ object WallpaperColorHelper {
      */
     fun getCuratedRgb(wallpaperId: String): Triple<Int, Int, Int>? {
         return when (wallpaperId) {
+            "pixel_11_fold_pine_dark" -> Triple(0xFF33341F.toInt(), 0xFF2D3C3E.toInt(), 0xFF2A3A3A.toInt()) // Pine Dark
+
+            "pixel_11_fold_pine" -> Triple(0xFF372305.toInt(), 0xFF5D503B.toInt(), 0xFF474330.toInt()) // Pine
+
+            "pixel_11_fold_midnight_dark" -> Triple(0xFF1E15F3.toInt(), 0xFF111F90.toInt(), 0xFF6CB1F5.toInt()) // Midnight Dark
+
+            "pixel_11_fold_midnight" -> Triple(0xFF222A33.toInt(), 0xFF2A2F39.toInt(), 0xFF2C313B.toInt()) // Midnight
+
             // ColorOS 17 Flow: Sunset Orange / Amber / Coral / Flow Purple
             "coloros_17"            -> Triple(0xFFFE874F.toInt(), 0xFFEA580C.toInt(), 0xFF9C27B0.toInt())
 
@@ -329,6 +337,10 @@ object WallpaperColorHelper {
             "xiaomi_18_pro_max_cy"  -> XiaomiCYWallpaperService::class.java
             "xiaomi_18_pro_max_db"  -> XiaomiDBWallpaperService::class.java
             "xiaomi_18_pro_max_pk"  -> XiaomiPKWallpaperService::class.java
+            "pixel_11_fold_midnight" -> Pixel11FoldMidnightWallpaperService::class.java
+            "pixel_11_fold_midnight_dark" -> Pixel11FoldMidnightDarkWallpaperService::class.java
+            "pixel_11_fold_pine" -> Pixel11FoldPineWallpaperService::class.java
+            "pixel_11_fold_pine_dark" -> Pixel11FoldPineDarkWallpaperService::class.java
             else -> LiveWallpaperService::class.java
         }
     }

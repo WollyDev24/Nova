@@ -242,6 +242,13 @@ fun HomeScreen(
                 coverUri = "file:///android_asset/thumbnails/Xiaomi-18-Pro/Light01.webp",
                 items = allWallpapers.filter { it.collection == "Xiaomi 18 Pro" }
             ),
+                        CollectionItem(
+                id = "pixel_11_fold",
+                name = "Pixel 11 Fold",
+                subtitle = "4 Wallpaper inspired by Beaches",
+                coverUri = "file:///android_asset/thumbnails/Pixel-11-Fold/Midnight.webp",
+                items = allWallpapers.filter { it.collection == "Pixel 11 Fold" }
+            ),
             CollectionItem(
                 id = "custom",
                 name = "Custom Videos",

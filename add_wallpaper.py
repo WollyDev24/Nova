@@ -272,8 +272,8 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
     if f'"{wallpaper_id}"' not in color_helper_text:
         service_map_entry = f'            "{wallpaper_id}" -> {service_class_name}::class.java\n'
         color_helper_text = re.sub(
-            r'(else\s*->\s*LiveWallpaperService::class\.java)',
-            f'{service_map_entry}\\1',
+            r'([ \t]*else\s*->\s*LiveWallpaperService::class\.java)',
+            f'{service_map_entry}            else -> LiveWallpaperService::class.java',
             color_helper_text,
             count=1
         )
@@ -302,8 +302,8 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
             ),
 """
         item_kt_text = re.sub(
-            r'(\s*\)\s*\n\s*val DEFAULT_WALLPAPER)',
-            f'\n{new_wallpaper_entry}        )\\n        val DEFAULT_WALLPAPER',
+            r'(\)[ \t]*,?)[ \t]*\n([ \t]*\)\s*\n\s*val DEFAULT_WALLPAPER)',
+            f'),\n{new_wallpaper_entry}        )\\n        val DEFAULT_WALLPAPER',
             item_kt_text,
             count=1
         )

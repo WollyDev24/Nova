@@ -145,9 +145,48 @@ data class WallpaperItem(
                 durationSec = 4.0f,
                 resolution = "1080x1080",
                 description = "Signature ColorOS fluid sunset silk wave dynamic animation."
-            )
+            ),
+            WallpaperItem(
+                id = "pixel_11_fold_midnight",
+                title = "Midnight",
+                collection = "Pixel 11 Fold",
+                videoUri = "asset:///wallpapers/Pixel-11-Fold/Midnight.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-11-Fold/Midnight.webp",
+                durationSec = 1.5f,
+                resolution = "2650x2208",
+                description = "Midnight Beach"
+            ),
+            WallpaperItem(
+                id = "pixel_11_fold_midnight_dark",
+                title = "Midnight Dark",
+                collection = "Pixel 11 Fold",
+                videoUri = "asset:///wallpapers/Pixel-11-Fold/MidnightDark.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-11-Fold/MidnightDark.webp",
+                durationSec = 1.5f,
+                resolution = "2650x2208",
+                description = "Dark Midnight Beach"
+            ),
+            WallpaperItem(
+                id = "pixel_11_fold_pine",
+                title = "Pine",
+                collection = "Pixel 11 Fold",
+                videoUri = "asset:///wallpapers/Pixel-11-Fold/Pine.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-11-Fold/Pine.webp",
+                durationSec = 1.6f,
+                resolution = "2650x2208",
+                description = "Pine Beach"
+            ),
+            WallpaperItem(
+                id = "pixel_11_fold_pine_dark",
+                title = "Pine Dark",
+                collection = "Pixel 11 Fold",
+                videoUri = "asset:///wallpapers/Pixel-11-Fold/PineDark.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-11-Fold/PineDark.webp",
+                durationSec = 1.6f,
+                resolution = "2650x2208",
+                description = "Dark Pine Beach wallpaper"
+            ),
         )
-
         val DEFAULT_WALLPAPER = BUNDLED_WALLPAPERS[0]
     }
 }

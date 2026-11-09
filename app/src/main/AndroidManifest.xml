@@ -163,6 +163,50 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+
+        <service
+            android:name=".service.Pixel11FoldMidnightWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Midnight"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_midnight" />
+        </service>
+
+
+        <service
+            android:name=".service.Pixel11FoldMidnightDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Midnight Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_midnight_dark" />
+        </service>
+
+
+        <service
+            android:name=".service.Pixel11FoldPineWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Pine"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_pine" />
+        </service>
+
+
+        <service
+            android:name=".service.Pixel11FoldPineDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Pine Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_pine_dark" />
+        </service>
+
     </application>
 
 </manifest>
