@@ -77,7 +77,7 @@ jobs:
       - name: Build Dev APK
         run: |
           VERSION_CODE=$((1000 + ${{ github.run_number }}))
-          VERSION_NAME="1.1.0-dev.${{ github.run_number }}"
+          VERSION_NAME="1.1.1-dev.${{ github.run_number }}"
           echo "Building Nova Dev $VERSION_NAME ($VERSION_CODE)..."
           ./gradlew assembleDev \
             -PversionCode="$VERSION_CODE" \
@@ -102,7 +102,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: dev
-          name: "Nova 1.1.0-dev.${{ github.run_number }}"
+          name: "Nova 1.1.1-dev.${{ github.run_number }}"
           body: |
             ### Automated Development Build (Commit: `${{ github.sha }}`)
 
