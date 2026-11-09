@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Card
@@ -32,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +50,7 @@ import coil3.request.ImageRequest
 import com.livewall.app.model.WallpaperItem
 import com.livewall.app.ui.theme.ShapeCard
 import com.livewall.app.ui.theme.ShapePill
+import com.livewall.app.util.WallpaperDownloader
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -58,6 +61,9 @@ fun WallpaperCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isDownloaded = remember(wallpaper.id) {
+        WallpaperDownloader.isDownloaded(context, wallpaper)
+    }
     val containerColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
     } else {
@@ -139,12 +145,8 @@ fun WallpaperCard(
                         )
                     }
 
-                    // Active badge if selected
-                    AnimatedVisibility(
-                        visible = isSelected,
-                        enter = fadeIn(spring()),
-                        exit = fadeOut(spring())
-                    ) {
+                    // Active badge if selected or download icon if not downloaded
+                    if (isSelected) {
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primary,
@@ -156,6 +158,21 @@ fun WallpaperCard(
                                     imageVector = Icons.Rounded.CheckCircle,
                                     contentDescription = "Active",
                                     modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    } else if (!isDownloaded) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.60f),
+                            contentColor = Color.White.copy(alpha = 0.90f),
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Download,
+                                    contentDescription = "Download required",
+                                    modifier = Modifier.size(15.dp)
                                 )
                             }
                         }

@@ -168,8 +168,8 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
     xml_res_name = f"wallpaper_{wallpaper_id}"
     drawable_thumb_name = f"thumb_{wallpaper_id}.png"
 
-    # Destination paths
-    wp_asset_dir = ASSETS_DIR / "wallpapers" / col_folder
+    # Destination paths (videos are saved to root wallpapers/ for GitHub hosting to keep APK light)
+    wp_asset_dir = REPO_ROOT / "wallpapers" / col_folder
     thumb_asset_dir = ASSETS_DIR / "thumbnails" / col_folder
     thumb_start_asset_dir = ASSETS_DIR / "thumbnails" / "start" / col_folder
     res_drawable_dir = RES_DIR / "drawable"

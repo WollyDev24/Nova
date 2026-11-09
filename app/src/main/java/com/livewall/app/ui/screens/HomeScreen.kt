@@ -108,6 +108,7 @@ import com.livewall.app.ui.theme.LiveWallThemeState
 import com.livewall.app.ui.theme.ShapeCard
 import com.livewall.app.ui.theme.ShapePill
 import com.livewall.app.util.UpdateCheckResult
+import com.livewall.app.util.WallpaperDownloader
 import com.livewall.app.util.UpdateInfo
 import com.livewall.app.util.UpdateManager
 import kotlinx.coroutines.Dispatchers
@@ -290,40 +291,27 @@ fun HomeScreen(
     }
 
     fun applyLiveWallpaper(item: WallpaperItem) {
-        if (item.videoUri.startsWith("http://") || item.videoUri.startsWith("https://")) {
-            Toast.makeText(context, "Downloading community wallpaper...", Toast.LENGTH_SHORT).show()
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val communityDir = File(context.filesDir, "community_videos").apply { mkdirs() }
-                    val destinationFile = File(communityDir, "${item.id}.mp4")
-                    if (!destinationFile.exists() || destinationFile.length() == 0L) {
-                        val connection = URL(item.videoUri).openConnection()
-                        connection.connectTimeout = 15_000
-                        connection.readTimeout = 30_000
-                        connection.getInputStream().use { input ->
-                            FileOutputStream(destinationFile).use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-                    }
-                    val localItem = item.copy(videoUri = destinationFile.absolutePath)
-                    withContext(Dispatchers.Main) {
-                        applyLiveWallpaper(localItem)
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
+        if (!WallpaperDownloader.isDownloaded(context, item)) {
+            Toast.makeText(context, "Downloading \"${item.title}\"...", Toast.LENGTH_SHORT).show()
+            scope.launch {
+                val res = WallpaperDownloader.downloadWallpaper(context, item)
+                if (res.isSuccess) {
+                    val playable = WallpaperDownloader.getPlayableUri(context, item)
+                    applyLiveWallpaper(item.copy(videoUri = playable))
+                } else {
+                    Toast.makeText(context, "Download failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                 }
             }
             return
         }
 
-        prefs.selectWallpaper(item)
+        val playableUri = WallpaperDownloader.getPlayableUri(context, item)
+        val readyItem = if (item.videoUri != playableUri) item.copy(videoUri = playableUri) else item
+        prefs.selectWallpaper(readyItem)
         activeWallpaperId = item.id
         // Sync static bitmap in background for Samsung One UI & system Color Palette
         scope.launch(Dispatchers.IO) {
-            WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, item)
+            WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, readyItem)
         }
         try {
             val serviceClass = WallpaperColorHelper.getServiceClassForWallpaper(item.id)

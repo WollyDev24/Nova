@@ -28,6 +28,7 @@ import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.model.WallpaperItem
+import com.livewall.app.util.WallpaperDownloader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -177,27 +178,28 @@ open class LiveWallpaperService : WallpaperService() {
                 uriStr = WallpaperItem.DEFAULT_WALLPAPER.videoUri
                 prefs.selectedWallpaperUri = uriStr
             }
+            val playableUriStr = WallpaperDownloader.getPlayableUri(applicationContext, uriStr, prefs.selectedWallpaperId)
             try {
-                val forwardItem = MediaItem.fromUri(Uri.parse(uriStr))
+                val forwardItem = MediaItem.fromUri(Uri.parse(playableUriStr))
                 fp.setMediaItem(forwardItem)
                 fp.prepare()
 
-                val reverseUri = getReverseUri(uriStr)
+                val reverseUri = getReverseUri(playableUriStr)
                 if (reverseUri != null && reversePlayer != null) {
                     val reverseItem = MediaItem.fromUri(Uri.parse(reverseUri))
                     reversePlayer?.setMediaItem(reverseItem)
                     reversePlayer?.prepare()
                     hasReverseVideo = true
-                    Log.d(tag, "Pre-buffered dual players: forward=$uriStr, reverse=$reverseUri")
+                    Log.d(tag, "Pre-buffered dual players: forward=$playableUriStr, reverse=$reverseUri")
                 } else {
                     hasReverseVideo = false
-                    Log.d(tag, "Single forward player loaded: $uriStr")
+                    Log.d(tag, "Single forward player loaded: $playableUriStr")
                 }
                 updateWallpaperColors()
             } catch (e: Exception) {
-                Log.e(tag, "Error loading media item: $uriStr, attempting default wallpaper fallback", e)
+                Log.e(tag, "Error loading media item: $playableUriStr, attempting default wallpaper fallback", e)
                 try {
-                    val fallbackUri = WallpaperItem.DEFAULT_WALLPAPER.videoUri
+                    val fallbackUri = WallpaperDownloader.getPlayableUri(applicationContext, WallpaperItem.DEFAULT_WALLPAPER.videoUri)
                     fp.setMediaItem(MediaItem.fromUri(Uri.parse(fallbackUri)))
                     fp.prepare()
                 } catch (e2: Exception) {
@@ -345,25 +347,7 @@ open class LiveWallpaperService : WallpaperService() {
         }
 
         private fun getReverseUri(forwardUriStr: String): String? {
-            if (forwardUriStr.endsWith(".mp4")) {
-                val revUriStr = forwardUriStr.substringBeforeLast(".mp4") + "_rev.mp4"
-                if (revUriStr.startsWith("asset:///")) {
-                    val assetPath = revUriStr.removePrefix("asset:///")
-                    return try {
-                        applicationContext.assets.open(assetPath).use { }
-                        revUriStr
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
-                if (revUriStr.startsWith("file://")) {
-                    val path = Uri.parse(revUriStr).path
-                    if (path != null && java.io.File(path).exists()) {
-                        return revUriStr
-                    }
-                }
-            }
-            return null
+            return WallpaperDownloader.getPlayableReverseUri(applicationContext, forwardUriStr)
         }
 
         private fun stopReversePlayback() {

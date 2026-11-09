@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Replay
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
@@ -46,7 +48,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,6 +82,7 @@ import com.livewall.app.model.WallpaperItem
 import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.components.VideoPlayerView
 import com.livewall.app.ui.theme.ShapePill
+import com.livewall.app.util.WallpaperDownloader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -95,6 +101,9 @@ fun PreviewSheet(
     var playerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
     var currentTrigger by remember { mutableStateOf(prefs.trigger) }
     var showPaletteFlyout by remember { mutableStateOf(false) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var downloadVersion by remember { mutableIntStateOf(0) }
 
     val initialIndex = remember(initialWallpaper.id, wallpapers) {
         val idx = wallpapers.indexOfFirst { it.id == initialWallpaper.id }
@@ -102,6 +111,14 @@ fun PreviewSheet(
     }
     val pagerState = rememberPagerState(initialPage = initialIndex) { wallpapers.size }
     val currentWallpaper = wallpapers.getOrNull(pagerState.currentPage) ?: initialWallpaper
+
+    val isCurrentDownloaded = remember(currentWallpaper.id, downloadVersion) {
+        WallpaperDownloader.isDownloaded(context, currentWallpaper)
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        isDownloading = false
+    }
 
     val currentRgb = remember(currentWallpaper.id) {
         WallpaperColorHelper.getWallpaperColorsRgb(context, currentWallpaper)
@@ -141,9 +158,16 @@ fun PreviewSheet(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    if (isCurrent) {
+                    val isDownloaded = remember(item.id, downloadVersion) {
+                        WallpaperDownloader.isDownloaded(context, item)
+                    }
+
+                    if (isCurrent && isDownloaded) {
+                        val playableUri = remember(item.id, downloadVersion) {
+                            WallpaperDownloader.getPlayableUri(context, item)
+                        }
                         VideoPlayerView(
-                            videoUri = item.videoUri,
+                            videoUri = playableUri,
                             scalingMode = ScalingMode.CROP,
                             isMuted = true,
                             autoPlay = true,
@@ -296,22 +320,24 @@ fun PreviewSheet(
                         }
                     }
 
-                    // Replay Button
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.60f),
-                        contentColor = Color.White,
-                        shadowElevation = 6.dp,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                playerInstance?.seekTo(0)
-                                playerInstance?.play()
+                    // Replay Button (only visible when video is downloaded)
+                    if (isCurrentDownloaded) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.60f),
+                            contentColor = Color.White,
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    playerInstance?.seekTo(0)
+                                    playerInstance?.play()
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(imageVector = Icons.Rounded.Replay, contentDescription = "Replay", modifier = Modifier.size(20.dp))
                             }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(imageVector = Icons.Rounded.Replay, contentDescription = "Replay", modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -350,59 +376,126 @@ fun PreviewSheet(
                         }
                     )
 
-                    // Apply Button
-                    Button(
-                        onClick = {
-                            prefs.selectWallpaper(currentWallpaper)
-                            prefs.trigger = currentTrigger
-
-                            // Sync static frame for Samsung One UI Color Palette daemon
-                            scope.launch(Dispatchers.IO) {
-                                WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, currentWallpaper)
-                            }
-
-                            try {
-                                val serviceClass = WallpaperColorHelper.getServiceClassForWallpaper(currentWallpaper.id)
-                                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                                    putExtra(
-                                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                                        ComponentName(context, serviceClass)
-                                    )
+                    // Action Button: Download Wallpaper OR Apply as Live Wallpaper
+                    if (!isCurrentDownloaded) {
+                        Button(
+                            onClick = {
+                                if (!isDownloading) {
+                                    isDownloading = true
+                                    downloadProgress = 0f
+                                    scope.launch {
+                                        val result = WallpaperDownloader.downloadWallpaper(context, currentWallpaper) { p ->
+                                            downloadProgress = p
+                                        }
+                                        isDownloading = false
+                                        if (result.isSuccess) {
+                                            downloadVersion++
+                                            Toast.makeText(context, "Ready to apply \"${currentWallpaper.title}\"!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Download failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
                                 }
-                                context.startActivity(intent)
-                                Toast.makeText(context, "Applying \"${currentWallpaper.title}\"...", Toast.LENGTH_SHORT).show()
-                            } catch (_: Exception) {
+                            },
+                            enabled = !isDownloading,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = ShapePill,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                        ) {
+                            if (isDownloading) {
+                                CircularProgressIndicator(
+                                    progress = { downloadProgress },
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.5.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Downloading ${(downloadProgress * 100).toInt()}%...",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Download,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Download Wallpaper",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else {
+                        // Apply Button
+                        Button(
+                            onClick = {
+                                val playableUri = WallpaperDownloader.getPlayableUri(context, currentWallpaper)
+                                val readyItem = if (currentWallpaper.videoUri != playableUri) {
+                                    currentWallpaper.copy(videoUri = playableUri)
+                                } else {
+                                    currentWallpaper
+                                }
+                                prefs.selectWallpaper(readyItem)
+                                prefs.trigger = currentTrigger
+
+                                // Sync static frame for Samsung One UI Color Palette daemon
+                                scope.launch(Dispatchers.IO) {
+                                    WallpaperColorHelper.syncStaticBitmapForSamsungOneUI(context, readyItem)
+                                }
+
                                 try {
-                                    val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
-                                    context.startActivity(fallbackIntent)
+                                    val serviceClass = WallpaperColorHelper.getServiceClassForWallpaper(currentWallpaper.id)
+                                    val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                                        putExtra(
+                                            WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                                            ComponentName(context, serviceClass)
+                                        )
+                                    }
+                                    context.startActivity(intent)
+                                    Toast.makeText(context, "Applying \"${currentWallpaper.title}\"...", Toast.LENGTH_SHORT).show()
                                 } catch (_: Exception) {
-                                    Toast.makeText(context, "Selected \"${currentWallpaper.title}\"", Toast.LENGTH_SHORT).show()
+                                    try {
+                                        val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
+                                        context.startActivity(fallbackIntent)
+                                    } catch (_: Exception) {
+                                        Toast.makeText(context, "Selected \"${currentWallpaper.title}\"", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
-                            }
 
-                            onApplied(currentWallpaper)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = ShapePill,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Wallpaper,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Apply as Live Wallpaper",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                                onApplied(readyItem)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = ShapePill,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Wallpaper,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Apply as Live Wallpaper",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }

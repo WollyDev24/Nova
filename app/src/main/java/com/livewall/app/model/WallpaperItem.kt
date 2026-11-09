@@ -227,6 +227,6 @@ data class WallpaperItem(
                 description = "Silver Dark super wallpaper animation."
             ),
         )
-        val DEFAULT_WALLPAPER = BUNDLED_WALLPAPERS[0]
+        val DEFAULT_WALLPAPER = BUNDLED_WALLPAPERS.firstOrNull { it.id == "coloros_17" } ?: BUNDLED_WALLPAPERS[0]
     }
 }

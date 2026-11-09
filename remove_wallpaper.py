@@ -92,9 +92,14 @@ def cleanup_wallpaper_from_code(wallpaper: dict):
         fwd_file = ASSETS_DIR / rel_asset
         delete_file_safely(fwd_file)
 
-        # Check for reverse video
+        # Check for reverse video in assets
         rev_path_str = str(fwd_file).replace(".mp4", "_rev.mp4")
         delete_file_safely(Path(rev_path_str))
+
+        # Check for video in root wallpapers/ repo hosting folder
+        repo_fwd_file = REPO_ROOT / rel_asset
+        delete_file_safely(repo_fwd_file)
+        delete_file_safely(Path(str(repo_fwd_file).replace(".mp4", "_rev.mp4")))
 
     turi = wallpaper.get("thumbnailUri", "")
     if "thumbnails/" in turi:
