@@ -88,7 +88,7 @@ def cleanup_wallpaper_from_code(wallpaper: dict):
     # Parse asset path from videoUri, e.g. "asset:///wallpapers/Pixel-11-Fold/PineDark.mp4"
     vuri = wallpaper.get("videoUri", "")
     if vuri.startswith("asset:///"):
-        rel_asset = vuri.removePrefix("asset:///")
+        rel_asset = vuri.removeprefix("asset:///")
         fwd_file = ASSETS_DIR / rel_asset
         delete_file_safely(fwd_file)
 
