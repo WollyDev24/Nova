@@ -11,6 +11,7 @@ import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.livewall.app.data.UpdateBranch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -28,7 +29,8 @@ data class UpdateInfo(
     val apkDownloadUrl: String?,
     val apkFileName: String?,
     val apkSize: Long = 0L,
-    val publishedAt: String = ""
+    val publishedAt: String = "",
+    val isDevBranch: Boolean = false
 )
 
 sealed class UpdateCheckResult {
@@ -43,6 +45,7 @@ object UpdateManager {
 
     const val GITHUB_REPO_URL = "https://github.com/WollyDev24/Nova"
     const val GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/WollyDev24/Nova/releases/latest"
+    const val GITHUB_API_DEV_RELEASE = "https://api.github.com/repos/WollyDev24/Nova/releases/tags/dev"
     const val GITHUB_RELEASES_URL = "https://github.com/WollyDev24/Nova/releases"
 
     fun getCurrentVersion(context: Context): String {
@@ -73,16 +76,23 @@ object UpdateManager {
                 return num1.compareTo(num2)
             }
         }
+        if (clean1 != clean2) {
+            return 1
+        }
         return 0
     }
 
     /**
-     * Checks GitHub API for the latest release in WollyDev24/Nova.
+     * Checks GitHub API for updates on either the Stable channel or Dev branch.
      */
-    suspend fun checkForUpdates(context: Context): UpdateCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdates(
+        context: Context,
+        branch: UpdateBranch = UpdateBranch.STABLE
+    ): UpdateCheckResult = withContext(Dispatchers.IO) {
         val currentVersion = getCurrentVersion(context)
         try {
-            val url = URL(GITHUB_API_LATEST_RELEASE)
+            val apiUrl = if (branch == UpdateBranch.DEV) GITHUB_API_DEV_RELEASE else GITHUB_API_LATEST_RELEASE
+            val url = URL(apiUrl)
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connectTimeout = 8000
@@ -93,7 +103,6 @@ object UpdateManager {
 
             val responseCode = conn.responseCode
             if (responseCode == 404) {
-                // No releases published yet on the GitHub repository
                 return@withContext UpdateCheckResult.UpToDate(currentVersion)
             }
             if (responseCode !in 200..299) {
@@ -106,8 +115,13 @@ object UpdateManager {
             val json = JSONObject(jsonStr)
 
             val tagName = json.optString("tag_name", "").trim()
-            val cleanLatest = tagName.removePrefix("v").removePrefix("V").trim()
-            val title = json.optString("name", "Nova $tagName").ifBlank { "Nova $tagName" }
+            val rawName = json.optString("name", "").trim()
+            val cleanLatest = if (branch == UpdateBranch.DEV && rawName.isNotBlank()) {
+                rawName.removePrefix("Nova").trim().removePrefix("v").removePrefix("V")
+            } else {
+                tagName.removePrefix("v").removePrefix("V").trim()
+            }
+            val title = if (rawName.isNotBlank()) rawName else "Nova $tagName"
             val body = json.optString("body", "").trim()
             val htmlUrl = json.optString("html_url", GITHUB_RELEASES_URL).ifBlank { GITHUB_RELEASES_URL }
             val publishedAt = json.optString("published_at", "")
@@ -131,7 +145,18 @@ object UpdateManager {
                 }
             }
 
-            val isNewer = compareVersions(cleanLatest, currentVersion) > 0
+            val isNewer = if (branch == UpdateBranch.DEV) {
+                // If running a stable release, any dev release is offered;
+                // If already on a dev release, check if build number is higher or different
+                if (currentVersion.contains("-dev")) {
+                    compareVersions(cleanLatest, currentVersion) > 0 || cleanLatest != currentVersion
+                } else {
+                    apkUrl != null
+                }
+            } else {
+                compareVersions(cleanLatest, currentVersion) > 0
+            }
+
             val info = UpdateInfo(
                 currentVersion = currentVersion,
                 latestVersion = if (cleanLatest.isNotBlank()) cleanLatest else tagName,
@@ -142,7 +167,8 @@ object UpdateManager {
                 apkDownloadUrl = apkUrl,
                 apkFileName = apkName,
                 apkSize = apkSize,
-                publishedAt = publishedAt
+                publishedAt = publishedAt,
+                isDevBranch = branch == UpdateBranch.DEV
             )
 
             if (isNewer) {

@@ -28,6 +28,17 @@ enum class ScalingMode(val key: String, val title: String) {
     }
 }
 
+enum class UpdateBranch(val key: String, val title: String, val subtitle: String) {
+    STABLE("stable", "Stable", "Official tested release builds"),
+    DEV("dev", "Dev Branch", "Continuous bleeding-edge builds from main branch");
+
+    companion object {
+        fun fromKey(key: String): UpdateBranch {
+            return entries.find { it.key == key } ?: STABLE
+        }
+    }
+}
+
 class WallpaperPreferences(private val context: Context) {
 
     private val prefs: SharedPreferences =
@@ -76,6 +87,10 @@ class WallpaperPreferences(private val context: Context) {
     var autoCheckUpdates: Boolean
         get() = prefs.getBoolean(KEY_AUTO_CHECK_UPDATES, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_CHECK_UPDATES, value).apply()
+
+    var updateBranch: UpdateBranch
+        get() = UpdateBranch.fromKey(prefs.getString(KEY_UPDATE_BRANCH, UpdateBranch.STABLE.key)!!)
+        set(value) = prefs.edit().putString(KEY_UPDATE_BRANCH, value.key).apply()
 
     fun selectWallpaper(item: WallpaperItem) {
         prefs.edit()
@@ -163,5 +178,6 @@ class WallpaperPreferences(private val context: Context) {
         const val KEY_CUSTOM_DISPLAY_NAME = "custom_display_name"
         const val KEY_CUSTOM_PHOTO_URL = "custom_photo_url"
         const val KEY_AUTO_CHECK_UPDATES = "auto_check_updates"
+        const val KEY_UPDATE_BRANCH = "update_branch"
     }
 }

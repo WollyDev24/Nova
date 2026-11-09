@@ -200,7 +200,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         if (prefs.autoCheckUpdates) {
-            val result = UpdateManager.checkForUpdates(context)
+            val result = UpdateManager.checkForUpdates(context, prefs.updateBranch)
             if (result is UpdateCheckResult.Available) {
                 pendingUpdateInfo = result.updateInfo
             }

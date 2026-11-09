@@ -71,6 +71,12 @@ android {
                 "proguard-rules.pro"
             )
         }
+        create("dev") {
+            initWith(getByName("release"))
+            signingConfig = if (hasSigningConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            versionNameSuffix = "-dev"
+            matchingFallbacks += listOf("release")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

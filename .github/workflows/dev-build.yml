@@ -1,0 +1,129 @@
+name: Dev Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  dev-build:
+    name: Build Signed Dev APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Make gradlew executable
+        run: |
+          chmod +x gradlew
+          sed -i '/org.gradle.java.home/d' gradle.properties 2>/dev/null || true
+
+      - name: Set up Google Services configuration
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo "Used GOOGLE_SERVICES_JSON from Actions secrets."
+          elif [ -f app/google-services.json ]; then
+            echo "Used committed app/google-services.json."
+          else
+            echo "Warning: app/google-services.json missing and secret not set."
+          fi
+
+      - name: Set up Android SDK
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" >/dev/null 2>&1 || true
+          fi
+
+      - name: Set up Keystore Signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore.jks"
+            printf 'storeFile=%s/keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$RUNNER_TEMP" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+            echo "Keystore signing configured with custom release keystore."
+          else
+            echo "No custom keystore secret detected. Using keystore/debug.keystore (SHA-1 registered in Firebase)."
+          fi
+
+      - name: Build Dev APK
+        run: |
+          VERSION_CODE=$((1000 + ${{ github.run_number }}))
+          VERSION_NAME="1.1.0-dev.${{ github.run_number }}"
+          echo "Building Nova Dev $VERSION_NAME ($VERSION_CODE)..."
+          ./gradlew assembleDev \
+            -PversionCode="$VERSION_CODE" \
+            -PversionName="$VERSION_NAME" \
+            --full-stacktrace
+
+      - name: Prepare Dev Artifacts
+        id: artifacts
+        run: |
+          mkdir -p dev-apks
+          ORIGINAL_APK=$(find app/build/outputs/apk/dev -name "*.apk" | head -n 1)
+          if [ -z "$ORIGINAL_APK" ]; then
+            echo "Error: Dev APK not found!"
+            exit 1
+          fi
+          TARGET_APK="dev-apks/Nova-1.1.0-dev.${{ github.run_number }}.apk"
+          cp "$ORIGINAL_APK" "$TARGET_APK"
+          echo "apk_path=$TARGET_APK" >> "$GITHUB_OUTPUT"
+          echo "Prepared dev APK at $TARGET_APK ($(du -h "$TARGET_APK" | cut -f1))"
+
+      - name: Publish Dev Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev
+          name: "Nova 1.1.0-dev.${{ github.run_number }}"
+          body: |
+            ### Automated Development Build (Commit: `${{ github.sha }}`)
+
+            This is an automated development pre-release built directly from the `main` branch.
+            - **Build Number**: `${{ github.run_number }}`
+            - **Commit**: `${{ github.sha }}`
+            - **Branch**: `main`
+
+            *Signed with keystore for seamless in-app upgrades via the Dev update channel.*
+          files: dev-apks/*.apk
+          prerelease: true
+          allowUpdates: true
+          replaces_old_assets: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Dev APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nova-Dev
+          path: dev-apks/*.apk
+          if-no-files-found: error
+          retention-days: 30

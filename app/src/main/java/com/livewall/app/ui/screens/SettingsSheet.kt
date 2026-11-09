@@ -20,10 +20,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.AltRoute
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.AspectRatio
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.DarkMode
@@ -65,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.livewall.app.R
 import com.livewall.app.data.ScalingMode
+import com.livewall.app.data.UpdateBranch
 import com.livewall.app.data.WallpaperPreferences
 import com.livewall.app.ui.components.TriggerSelector
 import com.livewall.app.ui.components.UpdateDialog
@@ -95,17 +98,18 @@ fun SettingsSheet(
     var scaling by remember { mutableStateOf(prefs.scalingMode) }
     var replayOnHome by remember { mutableStateOf(prefs.replayOnHomeReturn) }
     var autoCheckUpdates by remember { mutableStateOf(prefs.autoCheckUpdates) }
+    var updateBranch by remember { mutableStateOf(prefs.updateBranch) }
     var isCheckingUpdates by remember { mutableStateOf(false) }
     var updateCheckResult by remember { mutableStateOf<UpdateCheckResult?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var activeUpdateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    fun checkUpdates() {
+    fun checkUpdates(branch: UpdateBranch = updateBranch) {
         if (isCheckingUpdates) return
         isCheckingUpdates = true
         scope.launch {
-            val res = UpdateManager.checkForUpdates(context)
+            val res = UpdateManager.checkForUpdates(context, branch)
             isCheckingUpdates = false
             updateCheckResult = res
             when (res) {
@@ -114,7 +118,8 @@ fun SettingsSheet(
                     showUpdateDialog = true
                 }
                 is UpdateCheckResult.UpToDate -> {
-                    Toast.makeText(context, "Nova is up to date (v$currentVersion)", Toast.LENGTH_SHORT).show()
+                    val branchLabel = if (branch == UpdateBranch.DEV) "dev branch" else "stable release"
+                    Toast.makeText(context, "Nova is up to date on $branchLabel (v$currentVersion)", Toast.LENGTH_SHORT).show()
                 }
                 is UpdateCheckResult.Error -> {
                     Toast.makeText(context, "Update check: ${res.message}", Toast.LENGTH_SHORT).show()
@@ -338,6 +343,102 @@ fun SettingsSheet(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Update Channel Selector
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.AltRoute,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Update Channel",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            Text(
+                                text = updateBranch.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (updateBranch == UpdateBranch.DEV) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            UpdateBranch.entries.forEach { b ->
+                                val isSelected = updateBranch == b
+                                Surface(
+                                    shape = ShapePill,
+                                    color = if (isSelected) {
+                                        if (b == UpdateBranch.DEV) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHighest
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(ShapePill)
+                                        .clickable {
+                                            if (updateBranch != b) {
+                                                updateBranch = b
+                                                prefs.updateBranch = b
+                                                updateCheckResult = null
+                                                checkUpdates(b)
+                                            }
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp),
+                                                tint = if (b == UpdateBranch.DEV) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                        }
+                                        Text(
+                                            text = b.title,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) {
+                                                if (b == UpdateBranch.DEV) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = updateBranch.subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 6.dp, start = 4.dp)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
