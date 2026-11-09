@@ -342,6 +342,11 @@ def interactive_wizard():
 
     check_prerequisites()
 
+    if len(sys.argv) > 1 and sys.argv[1] in ["--remove", "-r"]:
+        from remove_wallpaper import interactive_removal_wizard
+        interactive_removal_wizard()
+        sys.exit(0)
+
     # Step 1: Input Path (file or folder)
     target_path = None
     if len(sys.argv) > 1 and sys.argv[1] not in ["--help", "-h"]:
@@ -349,6 +354,16 @@ def interactive_wizard():
         p = Path(cli_arg).expanduser().resolve()
         if p.exists():
             target_path = p
+
+    if not target_path:
+        print(f"{BOLD}What would you like to do?{RESET}")
+        print(f"  [1] {GREEN}Add wallpaper(s){RESET} (Single file or folder batch import)")
+        print(f"  [2] {YELLOW}Remove wallpaper(s){RESET} from a collection")
+        mode_choice = input(f"{BOLD}Select [1-2, default=1]: {RESET}").strip()
+        if mode_choice == "2":
+            from remove_wallpaper import interactive_removal_wizard
+            interactive_removal_wizard()
+            sys.exit(0)
 
     while not target_path:
         user_input = input(f"{BOLD}Enter path to video file or folder with videos: {RESET}").strip()
@@ -465,9 +480,14 @@ def interactive_wizard():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] in ["--remove", "-r"]:
+        from remove_wallpaper import interactive_removal_wizard
+        interactive_removal_wizard()
+        sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] in ["--help", "-h"]:
-        print("Usage: ./add_wallpaper.sh [path/to/video.mp4 | path/to/folder/]")
-        print("Runs an interactive wizard to import wallpapers, generate backwards videos,")
-        print("and register system wallpaper picker services.")
+        print("Usage: ./add_wallpaper.sh [path/to/video.mp4 | path/to/folder/] [--remove]")
+        print("  - Run without args: interactive mode (choose add or remove)")
+        print("  - Pass file or folder: batch import wallpapers")
+        print("  - Pass --remove or -r: remove wallpapers from collections")
         sys.exit(0)
     interactive_wizard()

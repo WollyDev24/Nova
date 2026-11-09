@@ -207,6 +207,50 @@
             <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_pine_dark" />
         </service>
 
+
+        <service
+            android:name=".service.ColorosGreenWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Green"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_coloros_green" />
+        </service>
+
+
+        <service
+            android:name=".service.ColorosGreenDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Green Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_coloros_green_dark" />
+        </service>
+
+
+        <service
+            android:name=".service.ColorosSilverWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Silver"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_coloros_silver" />
+        </service>
+
+
+        <service
+            android:name=".service.ColorosSilverDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Silver Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_coloros_silver_dark" />
+        </service>
+
     </application>
 
 </manifest>
