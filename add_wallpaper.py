@@ -465,4 +465,9 @@ def interactive_wizard():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] in ["--help", "-h"]:
+        print("Usage: ./add_wallpaper.sh [path/to/video.mp4 | path/to/folder/]")
+        print("Runs an interactive wizard to import wallpapers, generate backwards videos,")
+        print("and register system wallpaper picker services.")
+        sys.exit(0)
     interactive_wizard()
