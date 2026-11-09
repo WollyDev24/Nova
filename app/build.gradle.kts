@@ -35,8 +35,8 @@ android {
         applicationId = "com.livewall.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = overrideVersionCode ?: 1
-        versionName = overrideVersionName ?: "1.0.0"
+        versionCode = overrideVersionCode ?: 1010
+        versionName = overrideVersionName ?: "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
