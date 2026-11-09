@@ -76,13 +76,17 @@ object WallpaperColorHelper {
      */
     fun getCuratedRgb(wallpaperId: String): Triple<Int, Int, Int>? {
         return when (wallpaperId) {
-            "coloros_silver_dark" -> Triple(0xFF6D7B99.toInt(), 0xFF363F4C.toInt(), 0xFF38404B.toInt()) // Silver Dark
+            "pixel_10_fold_silver_dark" -> Triple(0xFF6D7B99.toInt(), 0xFF363F4C.toInt(), 0xFF38404B.toInt()) // Silver Dark
 
-            "coloros_silver" -> Triple(0xFF7B89A4.toInt(), 0xFF2B2D3D.toInt(), 0xFF2C333C.toInt()) // Silver
+            "pixel_10_fold_silver" -> Triple(0xFF7B89A4.toInt(), 0xFF2B2D3D.toInt(), 0xFF2C333C.toInt()) // Silver
 
-            "coloros_green_dark" -> Triple(0xFF607053.toInt(), 0xFF2E3A2A.toInt(), 0xFF313A2B.toInt()) // Green Dark
+            "pixel_10_fold_green_dark" -> Triple(0xFF607053.toInt(), 0xFF2E3A2A.toInt(), 0xFF313A2B.toInt()) // Green Dark
 
-            "coloros_green" -> Triple(0xFF3A4B37.toInt(), 0xFF354332.toInt(), 0xFF324030.toInt()) // Green
+            "pixel_10_fold_green" -> Triple(0xFF3A4B37.toInt(), 0xFF354332.toInt(), 0xFF324030.toInt()) // Green
+
+
+
+
 
             "pixel_11_fold_pine_dark" -> Triple(0xFF33341F.toInt(), 0xFF2D3C3E.toInt(), 0xFF2A3A3A.toInt()) // Pine Dark
 
@@ -349,10 +353,10 @@ object WallpaperColorHelper {
             "pixel_11_fold_midnight_dark" -> Pixel11FoldMidnightDarkWallpaperService::class.java
             "pixel_11_fold_pine" -> Pixel11FoldPineWallpaperService::class.java
             "pixel_11_fold_pine_dark" -> Pixel11FoldPineDarkWallpaperService::class.java
-            "coloros_green" -> ColorosGreenWallpaperService::class.java
-            "coloros_green_dark" -> ColorosGreenDarkWallpaperService::class.java
-            "coloros_silver" -> ColorosSilverWallpaperService::class.java
-            "coloros_silver_dark" -> ColorosSilverDarkWallpaperService::class.java
+            "pixel_10_fold_green" -> Pixel10FoldGreenWallpaperService::class.java
+            "pixel_10_fold_green_dark" -> Pixel10FoldGreenDarkWallpaperService::class.java
+            "pixel_10_fold_silver" -> Pixel10FoldSilverWallpaperService::class.java
+            "pixel_10_fold_silver_dark" -> Pixel10FoldSilverDarkWallpaperService::class.java
             else -> LiveWallpaperService::class.java
         }
     }

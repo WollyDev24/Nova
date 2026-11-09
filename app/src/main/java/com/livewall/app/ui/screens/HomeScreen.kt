@@ -249,6 +249,13 @@ fun HomeScreen(
                 coverUri = "file:///android_asset/thumbnails/Pixel-11-Fold/Midnight.webp",
                 items = allWallpapers.filter { it.collection == "Pixel 11 Fold" }
             ),
+                        CollectionItem(
+                id = "pixel_10_fold",
+                name = "Pixel 10 Fold",
+                subtitle = "Colored Blobs",
+                coverUri = "file:///android_asset/thumbnails/Pixel-10-Fold/Green.webp",
+                items = allWallpapers.filter { it.collection == "Pixel 10 Fold" }
+            ),
             CollectionItem(
                 id = "custom",
                 name = "Custom Videos",

@@ -187,44 +187,44 @@ data class WallpaperItem(
                 description = "Dark Pine Beach wallpaper"
             ),
             WallpaperItem(
-                id = "coloros_green",
+                id = "pixel_10_fold_green",
                 title = "Green",
-                collection = "ColorOS",
-                videoUri = "asset:///wallpapers/ColorOS/Green.mp4",
-                thumbnailUri = "file:///android_asset/thumbnails/ColorOS/Green.webp",
+                collection = "Pixel 10 Fold",
+                videoUri = "asset:///wallpapers/Pixel-10-Fold/Green.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-10-Fold/Green.webp",
                 durationSec = 2.1f,
                 resolution = "2650x2208",
-                description = "Green Blobs"
+                description = "Green super wallpaper animation."
             ),
             WallpaperItem(
-                id = "coloros_green_dark",
+                id = "pixel_10_fold_green_dark",
                 title = "Green Dark",
-                collection = "ColorOS",
-                videoUri = "asset:///wallpapers/ColorOS/GreenDark.mp4",
-                thumbnailUri = "file:///android_asset/thumbnails/ColorOS/GreenDark.webp",
+                collection = "Pixel 10 Fold",
+                videoUri = "asset:///wallpapers/Pixel-10-Fold/GreenDark.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-10-Fold/GreenDark.webp",
                 durationSec = 2.1f,
                 resolution = "2650x2208",
-                description = "Dark Green Blobs"
+                description = "Green Dark super wallpaper animation."
             ),
             WallpaperItem(
-                id = "coloros_silver",
+                id = "pixel_10_fold_silver",
                 title = "Silver",
-                collection = "ColorOS",
-                videoUri = "asset:///wallpapers/ColorOS/Silver.mp4",
-                thumbnailUri = "file:///android_asset/thumbnails/ColorOS/Silver.webp",
+                collection = "Pixel 10 Fold",
+                videoUri = "asset:///wallpapers/Pixel-10-Fold/Silver.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-10-Fold/Silver.webp",
                 durationSec = 2.1f,
                 resolution = "2650x2208",
-                description = "Silver Blobs"
+                description = "Silver super wallpaper animation."
             ),
             WallpaperItem(
-                id = "coloros_silver_dark",
+                id = "pixel_10_fold_silver_dark",
                 title = "Silver Dark",
-                collection = "ColorOS",
-                videoUri = "asset:///wallpapers/ColorOS/SilverDark.mp4",
-                thumbnailUri = "file:///android_asset/thumbnails/ColorOS/SilverDark.webp",
+                collection = "Pixel 10 Fold",
+                videoUri = "asset:///wallpapers/Pixel-10-Fold/SilverDark.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/Pixel-10-Fold/SilverDark.webp",
                 durationSec = 2.1f,
                 resolution = "2650x2208",
-                description = "Dark Silver Blobs"
+                description = "Silver Dark super wallpaper animation."
             ),
         )
         val DEFAULT_WALLPAPER = BUNDLED_WALLPAPERS[0]
