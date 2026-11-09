@@ -28,6 +28,223 @@
             </intent-filter>
         </activity>
 
-</application>
+        <service
+            android:name=".service.LiveWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/wallpaper_service_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper" />
+        </service>
+
+        <!-- Dedicated Wallpaper Services with Authentic Cover Thumbnails -->
+        <service
+            android:name=".service.ColorOSWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="ColorOS 17 Flow"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_coloros" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiLight01WallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Electric Cobalt"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_light01" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiLight02WallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Emerald Teal"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_light02" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiLight03WallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Deep Indigo"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_light03" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiLight04WallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Crimson Flame"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_light04" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiLight05WallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Golden Amber"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_light05" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiWHWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Aquamarine Crystal"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_wh" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiBKWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Obsidian Amber"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_bk" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiCYWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Cyber Crimson"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_cy" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiDBWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Deep Ocean Blue"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_db" />
+        </service>
+
+        <service
+            android:name=".service.XiaomiPKWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Blush Magenta"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pk" />
+        </service>
+
+        <!-- Pixel 11 Fold Services -->
+        <service
+            android:name=".service.Pixel11FoldMidnightWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Midnight"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_midnight" />
+        </service>
+
+        <service
+            android:name=".service.Pixel11FoldMidnightDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Midnight Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_midnight_dark" />
+        </service>
+
+        <service
+            android:name=".service.Pixel11FoldPineWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Pine"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_pine" />
+        </service>
+
+        <service
+            android:name=".service.Pixel11FoldPineDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Pine Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_11_fold_pine_dark" />
+        </service>
+
+        <!-- Pixel 10 Fold Services -->
+        <service
+            android:name=".service.Pixel10FoldGreenWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Green"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_10_fold_green" />
+        </service>
+
+        <service
+            android:name=".service.Pixel10FoldGreenDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Green Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_10_fold_green_dark" />
+        </service>
+
+        <service
+            android:name=".service.Pixel10FoldSilverWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Silver"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_10_fold_silver" />
+        </service>
+
+        <service
+            android:name=".service.Pixel10FoldSilverDarkWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Silver Dark"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_pixel_10_fold_silver_dark" />
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
 
 </manifest>

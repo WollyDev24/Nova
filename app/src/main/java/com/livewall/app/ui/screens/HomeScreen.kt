@@ -320,11 +320,15 @@ fun HomeScreen(
                     WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
                     ComponentName(context, serviceClass)
                 )
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
+            Toast.makeText(context, "Applying \"${item.title}\"...", Toast.LENGTH_SHORT).show()
         } catch (_: Exception) {
             try {
-                val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
+                val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
                 context.startActivity(fallbackIntent)
             } catch (_: Exception) {
                 Toast.makeText(context, "Selected \"${item.title}\"", Toast.LENGTH_SHORT).show()

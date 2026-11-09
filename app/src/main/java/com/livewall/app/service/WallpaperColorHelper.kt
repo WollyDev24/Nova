@@ -30,9 +30,16 @@ object WallpaperColorHelper {
      * One UI generates fitting, colorful palette swatches instead of dull grays.
      */
     @RequiresApi(Build.VERSION_CODES.O_MR1)
-    fun computeColors(context: Context, videoUriStr: String): WallpaperColors? {
+    fun computeColors(context: Context, videoUriStr: String, wallpaperId: String? = null): WallpaperColors? {
         val all = WallpaperItem.BUNDLED_WALLPAPERS + WallpaperPreferences(context).getCustomWallpapers()
-        val item = all.find { it.videoUri == videoUriStr } ?: all.firstOrNull() ?: return null
+        val item = (if (wallpaperId != null) all.find { it.id == wallpaperId } else null)
+            ?: all.find { it.videoUri == videoUriStr }
+            ?: all.find {
+                val f1 = it.videoUri.substringAfterLast("/")
+                val f2 = videoUriStr.substringAfterLast("/")
+                f1.isNotEmpty() && f1 == f2
+            }
+            ?: all.firstOrNull() ?: return null
 
         val rgb = getCuratedRgb(item.id)
         if (rgb != null) {
@@ -358,6 +365,34 @@ object WallpaperColorHelper {
             "pixel_10_fold_silver" -> Pixel10FoldSilverWallpaperService::class.java
             "pixel_10_fold_silver_dark" -> Pixel10FoldSilverDarkWallpaperService::class.java
             else -> LiveWallpaperService::class.java
+        }
+    }
+
+    /**
+     * Resolves the wallpaper ID associated with a dedicated subclass service.
+     */
+    fun getWallpaperIdForServiceClass(serviceClass: Class<out LiveWallpaperService>): String? {
+        return when (serviceClass) {
+            ColorOSWallpaperService::class.java -> "coloros_17"
+            XiaomiLight01WallpaperService::class.java -> "xiaomi_18_pro_light01"
+            XiaomiLight02WallpaperService::class.java -> "xiaomi_18_pro_light02"
+            XiaomiLight03WallpaperService::class.java -> "xiaomi_18_pro_light03"
+            XiaomiLight04WallpaperService::class.java -> "xiaomi_18_pro_light04"
+            XiaomiLight05WallpaperService::class.java -> "xiaomi_18_pro_light05"
+            XiaomiWHWallpaperService::class.java -> "xiaomi_18_pro_max_wh"
+            XiaomiBKWallpaperService::class.java -> "xiaomi_18_pro_max_bk"
+            XiaomiCYWallpaperService::class.java -> "xiaomi_18_pro_max_cy"
+            XiaomiDBWallpaperService::class.java -> "xiaomi_18_pro_max_db"
+            XiaomiPKWallpaperService::class.java -> "xiaomi_18_pro_max_pk"
+            Pixel11FoldMidnightWallpaperService::class.java -> "pixel_11_fold_midnight"
+            Pixel11FoldMidnightDarkWallpaperService::class.java -> "pixel_11_fold_midnight_dark"
+            Pixel11FoldPineWallpaperService::class.java -> "pixel_11_fold_pine"
+            Pixel11FoldPineDarkWallpaperService::class.java -> "pixel_11_fold_pine_dark"
+            Pixel10FoldGreenWallpaperService::class.java -> "pixel_10_fold_green"
+            Pixel10FoldGreenDarkWallpaperService::class.java -> "pixel_10_fold_green_dark"
+            Pixel10FoldSilverWallpaperService::class.java -> "pixel_10_fold_silver"
+            Pixel10FoldSilverDarkWallpaperService::class.java -> "pixel_10_fold_silver_dark"
+            else -> null
         }
     }
 }

@@ -145,10 +145,10 @@ def cleanup_wallpaper_from_code(wallpaper: dict):
     # 6. Remove from AndroidManifest.xml
     if MANIFEST_XML.exists():
         m_text = MANIFEST_XML.read_text(encoding="utf-8")
-        # Match <service ...> block containing the wallpaper resource or class name
-        pattern1 = rf'[ \t]*<service\b[^>]*>.*?android:resource=[\"\']@xml/wallpaper_{wid}[\"\'].*?</service>\s*'
-        pattern2 = rf'[ \t]*<service\b[^>]*>.*?android:resource=[\"\']@xml/{wid}[\"\'].*?</service>\s*'
-        pattern3 = rf'[ \t]*<service\b[^>]*android:name=[\"\']\.service\.{service_class_name}[\"\'].*?</service>\s*' if service_class_name else None
+        # Match ONLY the exact single <service ...> block containing the wallpaper resource or class name
+        pattern1 = rf'[ \t]*<service\b(?:(?!<service\b).)*?android:resource=[\"\']@xml/wallpaper_{wid}[\"\'].*?</service>\s*'
+        pattern2 = rf'[ \t]*<service\b(?:(?!<service\b).)*?android:resource=[\"\']@xml/{wid}[\"\'].*?</service>\s*'
+        pattern3 = rf'[ \t]*<service\b(?:(?!<service\b).)*?android:name=[\"\']\.service\.{service_class_name}[\"\'].*?</service>\s*' if service_class_name else None
 
         for p in [pattern1, pattern2, pattern3]:
             if p:

@@ -263,7 +263,7 @@ def process_wallpaper(video_file: Path, title: str, description: str, collection
             <meta-data android:name="android.service.wallpaper" android:resource="@xml/{xml_res_name}" />
         </service>
 """
-        manifest_text = manifest_text.replace("    </application>", f"{service_xml_entry}\n    </application>")
+        manifest_text = re.sub(r'([ \t]*</application>)', f"{service_xml_entry}\n\\1", manifest_text, count=1)
         MANIFEST_XML.write_text(manifest_text, encoding="utf-8")
         print(f"  • Added to AndroidManifest.xml: @xml/{xml_res_name}")
 
