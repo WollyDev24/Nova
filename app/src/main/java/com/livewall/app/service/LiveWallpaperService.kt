@@ -174,23 +174,19 @@ open class LiveWallpaperService : WallpaperService() {
         private fun loadCurrentWallpaper() {
             val fp = forwardPlayer ?: return
 
-            // If running a dedicated subclass service, auto-sync its specific wallpaper
+            // If running a dedicated subclass service, resolve its specific wallpaper item
             val boundWallpaperId = WallpaperColorHelper.getWallpaperIdForServiceClass(this@LiveWallpaperService::class.java)
-            if (boundWallpaperId != null) {
-                val matched = WallpaperItem.BUNDLED_WALLPAPERS.find { it.id == boundWallpaperId }
-                if (matched != null) {
-                    prefs.selectedWallpaperId = matched.id
-                    prefs.selectedWallpaperUri = matched.videoUri
-                    prefs.selectedWallpaperTitle = matched.title
-                }
+            val dedicatedItem = if (boundWallpaperId != null) {
+                WallpaperItem.BUNDLED_WALLPAPERS.find { it.id == boundWallpaperId }
+            } else {
+                null
             }
 
-            var uriStr = prefs.selectedWallpaperUri
-            if (uriStr.isBlank()) {
-                uriStr = WallpaperItem.DEFAULT_WALLPAPER.videoUri
-                prefs.selectedWallpaperUri = uriStr
+            val uriStr = dedicatedItem?.videoUri ?: prefs.selectedWallpaperUri.ifBlank {
+                WallpaperItem.DEFAULT_WALLPAPER.videoUri
             }
-            val playableUriStr = WallpaperDownloader.getPlayableUri(applicationContext, uriStr, prefs.selectedWallpaperId)
+            val wallpaperId = dedicatedItem?.id ?: prefs.selectedWallpaperId
+            val playableUriStr = WallpaperDownloader.getPlayableUri(applicationContext, uriStr, wallpaperId)
             try {
                 val forwardItem = MediaItem.fromUri(Uri.parse(playableUriStr))
                 fp.setMediaItem(forwardItem)
@@ -223,7 +219,10 @@ open class LiveWallpaperService : WallpaperService() {
         override fun onComputeColors(): WallpaperColors? {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 if (cachedWallpaperColors == null) {
-                    cachedWallpaperColors = WallpaperColorHelper.computeColors(applicationContext, prefs.selectedWallpaperUri, prefs.selectedWallpaperId)
+                    val boundWallpaperId = WallpaperColorHelper.getWallpaperIdForServiceClass(this@LiveWallpaperService::class.java)
+                    val wallpaperId = boundWallpaperId ?: prefs.selectedWallpaperId
+                    val uriStr = boundWallpaperId?.let { id -> WallpaperItem.BUNDLED_WALLPAPERS.find { it.id == id }?.videoUri } ?: prefs.selectedWallpaperUri
+                    cachedWallpaperColors = WallpaperColorHelper.computeColors(applicationContext, uriStr, wallpaperId)
                 }
                 return cachedWallpaperColors ?: super.onComputeColors()
             }
@@ -232,7 +231,10 @@ open class LiveWallpaperService : WallpaperService() {
 
         private fun updateWallpaperColors() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                val newColors = WallpaperColorHelper.computeColors(applicationContext, prefs.selectedWallpaperUri, prefs.selectedWallpaperId)
+                val boundWallpaperId = WallpaperColorHelper.getWallpaperIdForServiceClass(this@LiveWallpaperService::class.java)
+                val wallpaperId = boundWallpaperId ?: prefs.selectedWallpaperId
+                val uriStr = boundWallpaperId?.let { id -> WallpaperItem.BUNDLED_WALLPAPERS.find { it.id == id }?.videoUri } ?: prefs.selectedWallpaperUri
+                val newColors = WallpaperColorHelper.computeColors(applicationContext, uriStr, wallpaperId)
                 if (newColors != null) {
                     cachedWallpaperColors = newColors
                     notifyColorsChanged()
@@ -567,12 +569,17 @@ open class LiveWallpaperService : WallpaperService() {
         @OptIn(UnstableApi::class)
         override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
             when (key) {
-                WallpaperPreferences.KEY_SELECTED_URI -> {
-                    cachedWallpaperColors = null
-                    hasPlayedThisSession = false
-                    stopReversePlayback()
-                    loadCurrentWallpaper()
-                    replayVideo()
+                WallpaperPreferences.KEY_SELECTED_URI,
+                WallpaperPreferences.KEY_SELECTED_ID -> {
+                    // Only reload if this is a generic LiveWallpaperService instance, or matches this dedicated subclass
+                    val boundWallpaperId = WallpaperColorHelper.getWallpaperIdForServiceClass(this@LiveWallpaperService::class.java)
+                    if (boundWallpaperId == null || boundWallpaperId == prefs.selectedWallpaperId) {
+                        cachedWallpaperColors = null
+                        hasPlayedThisSession = false
+                        stopReversePlayback()
+                        loadCurrentWallpaper()
+                        replayVideo()
+                    }
                 }
                 WallpaperPreferences.KEY_SCALING -> {
                     val scaling = if (prefs.scalingMode == ScalingMode.CROP) {

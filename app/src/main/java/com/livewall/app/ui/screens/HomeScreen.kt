@@ -733,18 +733,20 @@ fun HomeScreen(
             selectedCollection != null -> selectedCollection!!.items
             else -> allWallpapers
         }
-        PreviewSheet(
-            initialWallpaper = item,
-            wallpapers = previewList,
-            prefs = prefs,
-            onDismiss = { previewWallpaper = null },
-            onApplied = { appliedItem ->
-                activeWallpaperId = appliedItem.id
-                activeTrigger = prefs.trigger
-                previewWallpaper = null
-                selectedCollection = null
-            }
-        )
+        androidx.compose.runtime.key(item.id) {
+            PreviewSheet(
+                initialWallpaper = item,
+                wallpapers = previewList,
+                prefs = prefs,
+                onDismiss = { previewWallpaper = null },
+                onApplied = { appliedItem ->
+                    activeWallpaperId = appliedItem.id
+                    activeTrigger = prefs.trigger
+                    previewWallpaper = null
+                    selectedCollection = null
+                }
+            )
+        }
     }
 
     // Modal Settings Bottom Sheet

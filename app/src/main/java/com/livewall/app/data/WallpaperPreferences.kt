@@ -82,7 +82,7 @@ class WallpaperPreferences(private val context: Context) {
             .putString(KEY_SELECTED_ID, item.id)
             .putString(KEY_SELECTED_URI, item.videoUri)
             .putString(KEY_SELECTED_TITLE, item.title)
-            .apply()
+            .commit()
     }
 
     fun getCustomWallpapers(): List<WallpaperItem> {

@@ -110,6 +110,13 @@ fun PreviewSheet(
         if (idx >= 0) idx else 0
     }
     val pagerState = rememberPagerState(initialPage = initialIndex) { wallpapers.size }
+
+    LaunchedEffect(initialWallpaper.id, initialIndex) {
+        if (initialIndex in 0 until wallpapers.size && pagerState.currentPage != initialIndex) {
+            pagerState.scrollToPage(initialIndex)
+        }
+    }
+
     val currentWallpaper = wallpapers.getOrNull(pagerState.currentPage) ?: initialWallpaper
 
     val isCurrentDownloaded = remember(currentWallpaper.id, downloadVersion) {
