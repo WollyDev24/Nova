@@ -21,9 +21,9 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.SeekParameters
 import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
@@ -46,8 +46,9 @@ open class LiveWallpaperService : WallpaperService() {
 
         private val tag = "LiveWallEngine"
         private lateinit var prefs: WallpaperPreferences
-        private var forwardPlayer: ExoPlayer? = null
-        private var reversePlayer: ExoPlayer? = null
+        private var player: ExoPlayer? = null
+        private var forwardMediaItem: MediaItem? = null
+        private var reverseMediaItem: MediaItem? = null
         private var keyguardManager: KeyguardManager? = null
         private var isScreenVisible = false
         private var hasPlayedThisSession = false
@@ -100,16 +101,11 @@ open class LiveWallpaperService : WallpaperService() {
         @OptIn(UnstableApi::class)
         private fun initPlayer() {
             try {
-                forwardPlayer?.release()
-                reversePlayer?.release()
+                player?.release()
 
-                val scaling = if (prefs.scalingMode == ScalingMode.CROP) {
-                    C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-                } else {
-                    C.VIDEO_SCALING_MODE_SCALE_TO_FIT
-                }
+                val scaling = getDesiredScalingMode()
 
-                forwardPlayer = ExoPlayer.Builder(applicationContext).build().apply {
+                player = ExoPlayer.Builder(applicationContext).build().apply {
                     repeatMode = Player.REPEAT_MODE_OFF
                     volume = 0f
                     videoScalingMode = scaling
@@ -122,57 +118,52 @@ open class LiveWallpaperService : WallpaperService() {
                                     videoDurationMs = d
                                 }
                             } else if (playbackState == Player.STATE_ENDED) {
-                                Log.d(tag, "Forward video completed, paused at final frame.")
+                                if (isReversing) {
+                                    Log.d(tag, "Reverse playback reached end of animation")
+                                    finishReversePlayback()
+                                } else {
+                                    Log.d(tag, "Forward video completed, paused at final frame.")
+                                }
                             }
                         }
 
+                        override fun onVideoSizeChanged(videoSize: VideoSize) {
+                            videoScalingMode = getDesiredScalingMode()
+                            Log.d(tag, "onVideoSizeChanged: w=${videoSize.width}, h=${videoSize.height}, scaling=${getDesiredScalingMode()}")
+                        }
+
+                        override fun onRenderedFirstFrame() {
+                            videoScalingMode = getDesiredScalingMode()
+                            Log.d(tag, "onRenderedFirstFrame: reinforced videoScalingMode=${getDesiredScalingMode()}")
+                        }
+
                         override fun onPlayerError(error: PlaybackException) {
-                            Log.e(tag, "Forward player error, attempting recovery", error)
+                            Log.e(tag, "Player error, attempting recovery", error)
                             try {
                                 loadCurrentWallpaper()
                                 val surface = currentSurfaceHolder?.surface
                                 if (surface != null && surface.isValid) {
-                                    forwardPlayer?.setVideoSurface(surface)
+                                    player?.setVideoSurface(surface)
+                                    player?.videoScalingMode = getDesiredScalingMode()
                                     if (isScreenVisible) {
                                         replayVideo()
                                     }
                                 }
                             } catch (e: Exception) {
-                                Log.e(tag, "Failed recovering forward player", e)
+                                Log.e(tag, "Failed recovering player", e)
                             }
-                        }
-                    })
-                }
-
-                reversePlayer = ExoPlayer.Builder(applicationContext).build().apply {
-                    repeatMode = Player.REPEAT_MODE_OFF
-                    volume = 0f
-                    videoScalingMode = scaling
-
-                    addListener(object : Player.Listener {
-                        override fun onPlaybackStateChanged(playbackState: Int) {
-                            if (playbackState == Player.STATE_ENDED) {
-                                if (isReversing) {
-                                    Log.d(tag, "Reverse player reached end of animation")
-                                    finishReversePlayback()
-                                }
-                            }
-                        }
-
-                        override fun onPlayerError(error: PlaybackException) {
-                            Log.e(tag, "Reverse player error", error)
                         }
                     })
                 }
 
                 loadCurrentWallpaper()
             } catch (e: Exception) {
-                Log.e(tag, "Error initializing ExoPlayers", e)
+                Log.e(tag, "Error initializing ExoPlayer", e)
             }
         }
 
         private fun loadCurrentWallpaper() {
-            val fp = forwardPlayer ?: return
+            val p = player ?: return
 
             // If running a dedicated subclass service, resolve its specific wallpaper item
             val boundWallpaperId = WallpaperColorHelper.getWallpaperIdForServiceClass(this@LiveWallpaperService::class.java)
@@ -188,28 +179,33 @@ open class LiveWallpaperService : WallpaperService() {
             val wallpaperId = dedicatedItem?.id ?: prefs.selectedWallpaperId
             val playableUriStr = WallpaperDownloader.getPlayableUri(applicationContext, uriStr, wallpaperId)
             try {
-                val forwardItem = MediaItem.fromUri(Uri.parse(playableUriStr))
-                fp.setMediaItem(forwardItem)
-                fp.prepare()
+                val fwdItem = MediaItem.fromUri(Uri.parse(playableUriStr))
+                forwardMediaItem = fwdItem
 
                 val reverseUri = getReverseUri(playableUriStr)
-                if (reverseUri != null && reversePlayer != null) {
-                    val reverseItem = MediaItem.fromUri(Uri.parse(reverseUri))
-                    reversePlayer?.setMediaItem(reverseItem)
-                    reversePlayer?.prepare()
+                if (reverseUri != null) {
+                    reverseMediaItem = MediaItem.fromUri(Uri.parse(reverseUri))
                     hasReverseVideo = true
-                    Log.d(tag, "Pre-buffered dual players: forward=$playableUriStr, reverse=$reverseUri")
+                    Log.d(tag, "Loaded forward=$playableUriStr and reverse=$reverseUri")
                 } else {
+                    reverseMediaItem = null
                     hasReverseVideo = false
                     Log.d(tag, "Single forward player loaded: $playableUriStr")
                 }
+
+                p.setMediaItem(fwdItem)
+                p.prepare()
                 updateWallpaperColors()
             } catch (e: Exception) {
                 Log.e(tag, "Error loading media item: $playableUriStr, attempting default wallpaper fallback", e)
                 try {
                     val fallbackUri = WallpaperDownloader.getPlayableUri(applicationContext, WallpaperItem.DEFAULT_WALLPAPER.videoUri)
-                    fp.setMediaItem(MediaItem.fromUri(Uri.parse(fallbackUri)))
-                    fp.prepare()
+                    val fallbackItem = MediaItem.fromUri(Uri.parse(fallbackUri))
+                    forwardMediaItem = fallbackItem
+                    reverseMediaItem = null
+                    hasReverseVideo = false
+                    p.setMediaItem(fallbackItem)
+                    p.prepare()
                 } catch (e2: Exception) {
                     Log.e(tag, "Critical failure during wallpaper load fallback", e2)
                 }
@@ -247,8 +243,8 @@ open class LiveWallpaperService : WallpaperService() {
             super.onSurfaceCreated(holder)
             currentSurfaceHolder = holder
             val scaling = getDesiredScalingMode()
-            forwardPlayer?.setVideoSurface(holder.surface)
-            forwardPlayer?.videoScalingMode = scaling
+            player?.setVideoSurface(holder.surface)
+            player?.videoScalingMode = scaling
             setSurfaceFrameRate(120f)
             updateWallpaperColors()
             if (isPreview) {
@@ -260,8 +256,8 @@ open class LiveWallpaperService : WallpaperService() {
                         if (replayVideo()) {
                             hasPlayedThisSession = true
                         }
-                    } else if (forwardPlayer?.playbackState != Player.STATE_ENDED) {
-                        forwardPlayer?.play()
+                    } else if (player?.playbackState != Player.STATE_ENDED) {
+                        player?.play()
                     }
                 }
             }
@@ -270,14 +266,14 @@ open class LiveWallpaperService : WallpaperService() {
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
             currentSurfaceHolder = holder
+            player?.videoScalingMode = getDesiredScalingMode()
             setSurfaceFrameRate(120f)
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
             currentSurfaceHolder = null
-            forwardPlayer?.clearVideoSurface()
-            reversePlayer?.clearVideoSurface()
+            player?.clearVideoSurface()
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
@@ -294,8 +290,14 @@ open class LiveWallpaperService : WallpaperService() {
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
                 if (isLocked && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
                     // Holding on lock screen
-                    forwardPlayer?.seekTo(0)
-                    forwardPlayer?.pause()
+                    val p = player
+                    val fwdItem = forwardMediaItem
+                    if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
+                        p.setMediaItem(fwdItem)
+                        p.videoScalingMode = getDesiredScalingMode()
+                    }
+                    player?.seekTo(0)
+                    player?.pause()
                     return
                 }
 
@@ -305,8 +307,8 @@ open class LiveWallpaperService : WallpaperService() {
                     } else {
                         // Stays static at final frame! DO NOT seek to 0 or replay.
                         // Only resume if it was paused midway before finishing.
-                        if (forwardPlayer?.playbackState != Player.STATE_ENDED) {
-                            forwardPlayer?.play()
+                        if (player?.playbackState != Player.STATE_ENDED) {
+                            player?.play()
                         }
                     }
                 } else {
@@ -316,7 +318,7 @@ open class LiveWallpaperService : WallpaperService() {
                 }
             } else {
                 if (!isReversing) {
-                    forwardPlayer?.pause()
+                    player?.pause()
                 }
             }
         }
@@ -387,20 +389,17 @@ open class LiveWallpaperService : WallpaperService() {
                     }
                 } catch (_: Exception) {}
 
-                val surface = currentSurfaceHolder?.surface
-                val rp = reversePlayer
-                val fp = forwardPlayer
-
-                if (rp != null && fp != null && surface != null && surface.isValid) {
-                    val revPos = rp.currentPosition
+                val p = player
+                val fwdItem = forwardMediaItem
+                if (p != null && fwdItem != null) {
+                    val revPos = p.currentPosition
                     val fwdPos = (videoDurationMs - revPos).coerceIn(0L, videoDurationMs)
-                    Log.d(tag, "Transferring surface back to forwardPlayer at fwdPos $fwdPos")
-                    rp.pause()
-                    rp.clearVideoSurface()
-                    val scaling = getDesiredScalingMode()
-                    fp.setVideoSurface(surface)
-                    fp.videoScalingMode = scaling
-                    fp.seekTo(fwdPos)
+                    Log.d(tag, "Transferring back to forwardMediaItem at fwdPos $fwdPos")
+                    if (p.currentMediaItem != fwdItem) {
+                        p.setMediaItem(fwdItem)
+                    }
+                    p.videoScalingMode = getDesiredScalingMode()
+                    p.seekTo(fwdPos)
                 }
                 setSurfaceFrameRate(120f)
             }
@@ -412,20 +411,15 @@ open class LiveWallpaperService : WallpaperService() {
             reversePlaybackJob?.cancel()
             reversePlaybackJob = null
 
-            val surface = currentSurfaceHolder?.surface
-            val rp = reversePlayer
-            val fp = forwardPlayer
-
-            if (rp != null) {
-                rp.pause()
-                rp.clearVideoSurface()
-            }
-            if (fp != null && surface != null && surface.isValid) {
-                val scaling = getDesiredScalingMode()
-                fp.setVideoSurface(surface)
-                fp.videoScalingMode = scaling
-                fp.seekTo(0)
-                fp.pause()
+            val p = player
+            val fwdItem = forwardMediaItem
+            if (p != null && fwdItem != null) {
+                if (p.currentMediaItem != fwdItem) {
+                    p.setMediaItem(fwdItem)
+                }
+                p.videoScalingMode = getDesiredScalingMode()
+                p.seekTo(0)
+                p.pause()
             }
 
             setSurfaceFrameRate(0f)
@@ -438,16 +432,15 @@ open class LiveWallpaperService : WallpaperService() {
 
         private fun playInReverse() {
             stopReversePlayback()
-            val fp = forwardPlayer ?: return
-            val surface = currentSurfaceHolder?.surface
+            val p = player ?: return
 
-            val currentForwardPos = fp.currentPosition
+            val currentForwardPos = p.currentPosition
             val duration = if (videoDurationMs > 0) videoDurationMs else 2000L
             Log.d(tag, "playInReverse requested: currentForwardPos=$currentForwardPos, duration=$duration, hasReverseVideo=$hasReverseVideo")
 
             if (currentForwardPos <= 50L) {
-                fp.seekTo(0)
-                fp.pause()
+                p.seekTo(0)
+                p.pause()
                 return
             }
 
@@ -459,22 +452,19 @@ open class LiveWallpaperService : WallpaperService() {
             }
             setSurfaceFrameRate(120f)
 
-            val rp = reversePlayer
-            if (hasReverseVideo && rp != null && surface != null && surface.isValid) {
-                // INSTANT 0ms latency hardware-accelerated reverse playback!
+            val revItem = reverseMediaItem
+            if (hasReverseVideo && revItem != null) {
                 val revStartPos = (duration - currentForwardPos).coerceIn(0L, duration)
-                Log.d(tag, "Instant surface transfer to reversePlayer at $revStartPos")
-                fp.pause()
-                fp.clearVideoSurface()
-                val scaling = getDesiredScalingMode()
-                rp.setVideoSurface(surface)
-                rp.videoScalingMode = scaling
-                rp.seekTo(revStartPos)
-                rp.play()
+                Log.d(tag, "Playing reverse track at $revStartPos")
+                p.setMediaItem(revItem)
+                p.videoScalingMode = getDesiredScalingMode()
+                p.prepare()
+                p.seekTo(revStartPos)
+                p.play()
 
                 reversePlaybackJob = CoroutineScope(Dispatchers.Main.immediate).launch {
                     while (isActive && isReversing) {
-                        if (rp.playbackState == Player.STATE_ENDED || rp.currentPosition >= duration - 30L) {
+                        if (p.playbackState == Player.STATE_ENDED || p.currentPosition >= duration - 30L) {
                             Log.d(tag, "Reverse playback completed naturally")
                             break
                         }
@@ -488,7 +478,7 @@ open class LiveWallpaperService : WallpaperService() {
             }
 
             // Fallback: Seek backwards smoothly for any custom video without a reverse track
-            fp.pause()
+            p.pause()
             val durationMs = currentForwardPos
             val startTime = SystemClock.uptimeMillis()
 
@@ -499,11 +489,11 @@ open class LiveWallpaperService : WallpaperService() {
                         val fraction = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
                         val targetPos = (currentForwardPos * (1f - fraction)).toLong()
 
-                        fp.seekTo(targetPos)
+                        p.seekTo(targetPos)
 
                         if (fraction >= 1f || targetPos <= 0L) {
-                            fp.seekTo(0)
-                            fp.pause()
+                            p.seekTo(0)
+                            p.pause()
                             break
                         }
                         delay(33)
@@ -531,8 +521,14 @@ open class LiveWallpaperService : WallpaperService() {
                 PlaybackTrigger.SCREEN_UNLOCK -> {
                     if (isLocked) {
                         hasPlayedThisSession = false
-                        forwardPlayer?.seekTo(0)
-                        forwardPlayer?.pause()
+                        val p = player
+                        val fwdItem = forwardMediaItem
+                        if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
+                            p.setMediaItem(fwdItem)
+                            p.videoScalingMode = getDesiredScalingMode()
+                        }
+                        player?.seekTo(0)
+                        player?.pause()
                     }
                 }
             }
@@ -559,24 +555,29 @@ open class LiveWallpaperService : WallpaperService() {
                 playInReverse()
             } else {
                 stopReversePlayback()
-                forwardPlayer?.pause()
-                forwardPlayer?.seekTo(0)
+                val p = player
+                val fwdItem = forwardMediaItem
+                if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
+                    p.setMediaItem(fwdItem)
+                    p.videoScalingMode = getDesiredScalingMode()
+                }
+                player?.pause()
+                player?.seekTo(0)
             }
         }
 
         private fun replayVideo(): Boolean {
             val surface = currentSurfaceHolder?.surface
-            val fp = forwardPlayer ?: return false
-            val rp = reversePlayer
-            if (rp != null) {
-                rp.pause()
-                rp.clearVideoSurface()
-            }
+            val p = player ?: return false
+            val fwdItem = forwardMediaItem ?: return false
             if (surface != null && surface.isValid) {
-                fp.setVideoSurface(surface)
-                fp.videoScalingMode = getDesiredScalingMode()
-                fp.seekTo(0)
-                fp.play()
+                p.setVideoSurface(surface)
+                if (p.currentMediaItem != fwdItem) {
+                    p.setMediaItem(fwdItem)
+                }
+                p.videoScalingMode = getDesiredScalingMode()
+                p.seekTo(0)
+                p.play()
                 return true
             }
             Log.d(tag, "replayVideo deferred: surface is not yet valid")
@@ -599,20 +600,20 @@ open class LiveWallpaperService : WallpaperService() {
                     }
                 }
                 WallpaperPreferences.KEY_SCALING -> {
-                    val scaling = if (prefs.scalingMode == ScalingMode.CROP) {
-                        C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-                    } else {
-                        C.VIDEO_SCALING_MODE_SCALE_TO_FIT
-                    }
-                    forwardPlayer?.videoScalingMode = scaling
-                    reversePlayer?.videoScalingMode = scaling
+                    player?.videoScalingMode = getDesiredScalingMode()
                 }
                 WallpaperPreferences.KEY_TRIGGER -> {
                     hasPlayedThisSession = false
                     val isLocked = keyguardManager?.isKeyguardLocked ?: false
                     if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK && isLocked) {
-                        forwardPlayer?.seekTo(0)
-                        forwardPlayer?.pause()
+                        val p = player
+                        val fwdItem = forwardMediaItem
+                        if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
+                            p.setMediaItem(fwdItem)
+                            p.videoScalingMode = getDesiredScalingMode()
+                        }
+                        player?.seekTo(0)
+                        player?.pause()
                     }
                 }
             }
@@ -632,10 +633,8 @@ open class LiveWallpaperService : WallpaperService() {
                 Log.w(tag, "Receiver already unregistered", e)
             }
             prefs.unregisterListener(this)
-            forwardPlayer?.release()
-            reversePlayer?.release()
-            forwardPlayer = null
-            reversePlayer = null
+            player?.release()
+            player = null
         }
     }
 }
