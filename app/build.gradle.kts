@@ -74,7 +74,9 @@ android {
         create("dev") {
             initWith(getByName("release"))
             signingConfig = if (hasSigningConfig) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
-            versionNameSuffix = "-dev"
+            if (overrideVersionName == null) {
+                versionNameSuffix = "-dev"
+            }
             matchingFallbacks += listOf("release")
         }
     }

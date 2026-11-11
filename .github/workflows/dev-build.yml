@@ -74,14 +74,41 @@ jobs:
             echo "No custom keystore secret detected. Using keystore/debug.keystore (SHA-1 registered in Firebase)."
           fi
 
+      - name: Determine Version
+        id: version
+        run: |
+          # 1. Extract current stable versionCode from app/build.gradle.kts
+          STABLE_CODE=$(grep -oP 'versionCode\s*=\s*(overrideVersionCode\s*\?:\s*)?\K\d+' app/build.gradle.kts | head -n 1)
+          if [ -z "$STABLE_CODE" ]; then
+            STABLE_CODE="1011"
+          fi
+
+          # 2. Extract base versionName from latest release tag or app/build.gradle.kts
+          LATEST_TAG=$(git describe --tags --abbrev=0 --match="v*" 2>/dev/null || echo "")
+          if [ -n "$LATEST_TAG" ]; then
+            BASE_NAME="${LATEST_TAG#v}"
+          else
+            BASE_NAME=$(grep -oP 'versionName\s*=\s*(overrideVersionName\s*\?:\s*)?"\K[^"]+' app/build.gradle.kts | head -n 1)
+          fi
+          if [ -z "$BASE_NAME" ]; then
+            BASE_NAME="1.1.1"
+          fi
+
+          # Match the current version code of the latest stable build, while only changing the version number
+          VERSION_CODE="$STABLE_CODE"
+          VERSION_NAME="${BASE_NAME}-dev.${{ github.run_number }}"
+
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "base_name=$BASE_NAME" >> "$GITHUB_OUTPUT"
+          echo "Dev Version determined: Name=$VERSION_NAME, Code=$VERSION_CODE (matched from latest stable build)"
+
       - name: Build Dev APK
         run: |
-          VERSION_CODE=$((1000 + ${{ github.run_number }}))
-          VERSION_NAME="1.1.1-dev.${{ github.run_number }}"
-          echo "Building Nova Dev $VERSION_NAME ($VERSION_CODE)..."
+          echo "Building Nova Dev ${{ steps.version.outputs.version_name }} (Code: ${{ steps.version.outputs.version_code }})..."
           ./gradlew assembleDev \
-            -PversionCode="$VERSION_CODE" \
-            -PversionName="$VERSION_NAME" \
+            -PversionCode="${{ steps.version.outputs.version_code }}" \
+            -PversionName="${{ steps.version.outputs.version_name }}" \
             --full-stacktrace
 
       - name: Prepare Dev Artifacts
@@ -93,7 +120,7 @@ jobs:
             echo "Error: Dev APK not found!"
             exit 1
           fi
-          TARGET_APK="dev-apks/Nova-1.1.0-dev.${{ github.run_number }}.apk"
+          TARGET_APK="dev-apks/Nova-${{ steps.version.outputs.version_name }}.apk"
           cp "$ORIGINAL_APK" "$TARGET_APK"
           echo "apk_path=$TARGET_APK" >> "$GITHUB_OUTPUT"
           echo "Prepared dev APK at $TARGET_APK ($(du -h "$TARGET_APK" | cut -f1))"
@@ -102,14 +129,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: dev
-          name: "Nova 1.1.1-dev.${{ github.run_number }}"
+          name: "Nova ${{ steps.version.outputs.version_name }}"
           body: |
             ### Automated Development Build (Commit: `${{ github.sha }}`)
 
             This is an automated development pre-release built directly from the `main` branch.
-            - **Build Number**: `${{ github.run_number }}`
+            - **Version Name**: `${{ steps.version.outputs.version_name }}`
+            - **Version Code**: `${{ steps.version.outputs.version_code }}` *(matched from latest stable release)*
+            - **Build Run**: `${{ github.run_number }}`
             - **Commit**: `${{ github.sha }}`
-            - **Branch**: `main`
 
             *Signed with keystore for seamless in-app upgrades via the Dev update channel.*
           files: dev-apks/*.apk

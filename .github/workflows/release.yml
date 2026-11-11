@@ -101,7 +101,13 @@ jobs:
             VER_NAME="1.0.${{ github.run_number }}"
             TAG_NAME="v$VER_NAME"
           fi
-          VER_CODE=$((1000 + ${{ github.run_number }}))
+          # Use versionCode configured in app/build.gradle.kts if available, else fallback
+          GRADLE_CODE=$(grep -oP 'versionCode\s*=\s*(overrideVersionCode\s*\?:\s*)?\K\d+' app/build.gradle.kts | head -n 1 || echo "")
+          if [ -n "$GRADLE_CODE" ]; then
+            VER_CODE="$GRADLE_CODE"
+          else
+            VER_CODE=$((1000 + ${{ github.run_number }}))
+          fi
           echo "version_name=$VER_NAME" >> "$GITHUB_OUTPUT"
           echo "version_code=$VER_CODE" >> "$GITHUB_OUTPUT"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
