@@ -125,6 +125,19 @@ jobs:
           echo "apk_path=$TARGET_APK" >> "$GITHUB_OUTPUT"
           echo "Prepared dev APK at $TARGET_APK ($(du -h "$TARGET_APK" | cut -f1))"
 
+      - name: Remove Old Dev Release Assets
+        run: |
+          echo "Checking for existing assets on the 'dev' release..."
+          OLD_ASSETS=$(gh release view dev --json assets --jq '.assets[].name' 2>/dev/null || true)
+          for asset in $OLD_ASSETS; do
+            if [ -n "$asset" ]; then
+              echo "Deleting old release asset: $asset"
+              gh release delete-asset dev "$asset" -y || true
+            fi
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish Dev Release
         uses: softprops/action-gh-release@v2
         with:

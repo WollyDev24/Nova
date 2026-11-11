@@ -140,7 +140,10 @@ object UpdateManager {
                         apkUrl = downloadUrl
                         apkName = name
                         apkSize = asset.optLong("size", 0L)
-                        break
+                        // If multiple APKs exist, prefer the one explicitly containing the release version name
+                        if (cleanLatest.isNotBlank() && name.contains(cleanLatest, ignoreCase = true)) {
+                            break
+                        }
                     }
                 }
             }
