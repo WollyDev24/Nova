@@ -83,8 +83,8 @@ jobs:
             STABLE_CODE="1011"
           fi
 
-          # 2. Extract base versionName from latest release tag or app/build.gradle.kts
-          LATEST_TAG=$(git describe --tags --abbrev=0 --match="v*" 2>/dev/null || echo "")
+          # 2. Extract base versionName from latest stable release tag (excluding dev tags) or app/build.gradle.kts
+          LATEST_TAG=$(git tag -l "v*" | grep -E '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' | sort -V | tail -n 1)
           if [ -n "$LATEST_TAG" ]; then
             BASE_NAME="${LATEST_TAG#v}"
           else
@@ -97,11 +97,13 @@ jobs:
           # Match the current version code of the latest stable build, while only changing the version number
           VERSION_CODE="$STABLE_CODE"
           VERSION_NAME="${BASE_NAME}-dev.${{ github.run_number }}"
+          TAG_NAME="v${VERSION_NAME}"
 
           echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "base_name=$BASE_NAME" >> "$GITHUB_OUTPUT"
-          echo "Dev Version determined: Name=$VERSION_NAME, Code=$VERSION_CODE (matched from latest stable build)"
+          echo "Dev Version determined: Name=$VERSION_NAME, Code=$VERSION_CODE, Tag=$TAG_NAME (matched from latest stable build)"
 
       - name: Build Dev APK
         run: |
@@ -125,24 +127,12 @@ jobs:
           echo "apk_path=$TARGET_APK" >> "$GITHUB_OUTPUT"
           echo "Prepared dev APK at $TARGET_APK ($(du -h "$TARGET_APK" | cut -f1))"
 
-      - name: Remove Old Dev Release Assets
-        run: |
-          echo "Checking for existing assets on the 'dev' release..."
-          OLD_ASSETS=$(gh release view dev --json assets --jq '.assets[].name' 2>/dev/null || true)
-          for asset in $OLD_ASSETS; do
-            if [ -n "$asset" ]; then
-              echo "Deleting old release asset: $asset"
-              gh release delete-asset dev "$asset" -y || true
-            fi
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Publish Dev Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: dev
+          tag_name: ${{ steps.version.outputs.tag_name }}
           name: "Nova ${{ steps.version.outputs.version_name }}"
+          target_commitish: ${{ github.sha }}
           body: |
             ### Automated Development Build (Commit: `${{ github.sha }}`)
 
@@ -155,8 +145,6 @@ jobs:
             *Signed with keystore for seamless in-app upgrades via the Dev update channel.*
           files: dev-apks/*.apk
           prerelease: true
-          allowUpdates: true
-          replaces_old_assets: true
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

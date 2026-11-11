@@ -14,6 +14,7 @@ import androidx.core.content.FileProvider
 import com.livewall.app.data.UpdateBranch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -45,6 +46,7 @@ object UpdateManager {
 
     const val GITHUB_REPO_URL = "https://github.com/WollyDev24/Nova"
     const val GITHUB_API_LATEST_RELEASE = "https://api.github.com/repos/WollyDev24/Nova/releases/latest"
+    const val GITHUB_API_RELEASES = "https://api.github.com/repos/WollyDev24/Nova/releases?per_page=10"
     const val GITHUB_API_DEV_RELEASE = "https://api.github.com/repos/WollyDev24/Nova/releases/tags/dev"
     const val GITHUB_RELEASES_URL = "https://github.com/WollyDev24/Nova/releases"
 
@@ -91,7 +93,7 @@ object UpdateManager {
     ): UpdateCheckResult = withContext(Dispatchers.IO) {
         val currentVersion = getCurrentVersion(context)
         try {
-            val apiUrl = if (branch == UpdateBranch.DEV) GITHUB_API_DEV_RELEASE else GITHUB_API_LATEST_RELEASE
+            val apiUrl = if (branch == UpdateBranch.DEV) GITHUB_API_RELEASES else GITHUB_API_LATEST_RELEASE
             val url = URL(apiUrl)
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
@@ -111,8 +113,23 @@ object UpdateManager {
                 return@withContext UpdateCheckResult.Error("GitHub responded with status $responseCode")
             }
 
-            val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
-            val json = JSONObject(jsonStr)
+            val rawResponse = conn.inputStream.bufferedReader().use { it.readText() }.trim()
+            val json = if (rawResponse.startsWith("[")) {
+                val releasesArray = JSONArray(rawResponse)
+                var selectedRelease: JSONObject? = null
+                for (i in 0 until releasesArray.length()) {
+                    val candidate = releasesArray.getJSONObject(i)
+                    val isPre = candidate.optBoolean("prerelease", false)
+                    val tag = candidate.optString("tag_name", "")
+                    if (isPre || tag.contains("-dev") || tag.equals("dev", ignoreCase = true)) {
+                        selectedRelease = candidate
+                        break
+                    }
+                }
+                selectedRelease ?: if (releasesArray.length() > 0) releasesArray.getJSONObject(0) else JSONObject()
+            } else {
+                JSONObject(rawResponse)
+            }
 
             val tagName = json.optString("tag_name", "").trim()
             val rawName = json.optString("name", "").trim()
