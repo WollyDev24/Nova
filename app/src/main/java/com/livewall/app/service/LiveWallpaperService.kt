@@ -51,6 +51,7 @@ open class LiveWallpaperService : WallpaperService() {
         private var reverseMediaItem: MediaItem? = null
         private var keyguardManager: KeyguardManager? = null
         private var isScreenVisible = false
+        private var isUserUnlocked = false
         private var hasPlayedThisSession = false
         private var cachedWallpaperColors: WallpaperColors? = null
         private var reversePlaybackJob: Job? = null
@@ -76,6 +77,7 @@ open class LiveWallpaperService : WallpaperService() {
             currentSurfaceHolder = surfaceHolder
             prefs = WallpaperPreferences(applicationContext)
             keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+            isUserUnlocked = !(keyguardManager?.isKeyguardLocked ?: false)
             val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
             wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LiveWall:AodReverseWakeLock")
 
@@ -251,7 +253,11 @@ open class LiveWallpaperService : WallpaperService() {
                 replayVideo()
             } else if (isScreenVisible) {
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
-                if (!isLocked || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
+                if (!isLocked) {
+                    isUserUnlocked = true
+                }
+                val isLockScreen = !isUserUnlocked && isLocked
+                if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
                     if (!hasPlayedThisSession || prefs.replayOnHomeReturn) {
                         if (replayVideo()) {
                             hasPlayedThisSession = true
@@ -268,6 +274,18 @@ open class LiveWallpaperService : WallpaperService() {
             currentSurfaceHolder = holder
             player?.videoScalingMode = getDesiredScalingMode()
             setSurfaceFrameRate(120f)
+            if (isScreenVisible && !hasPlayedThisSession) {
+                val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                if (!isLocked) {
+                    isUserUnlocked = true
+                }
+                val isLockScreen = !isUserUnlocked && isLocked
+                if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
+                    if (replayVideo()) {
+                        hasPlayedThisSession = true
+                    }
+                }
+            }
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
@@ -278,7 +296,7 @@ open class LiveWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
-            Log.d(tag, "onVisibilityChanged: visible=$visible, isReversing=$isReversing")
+            Log.d(tag, "onVisibilityChanged: visible=$visible, isUserUnlocked=$isUserUnlocked, isReversing=$isReversing")
             isScreenVisible = visible
             if (visible) {
                 stopReversePlayback()
@@ -288,7 +306,11 @@ open class LiveWallpaperService : WallpaperService() {
                 }
 
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
-                if (isLocked && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+                if (!isLocked) {
+                    isUserUnlocked = true
+                }
+                val isLockScreen = !isUserUnlocked && isLocked
+                if (isLockScreen && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
                     // Holding on lock screen
                     val p = player
                     val fwdItem = forwardMediaItem
@@ -319,6 +341,10 @@ open class LiveWallpaperService : WallpaperService() {
             } else {
                 if (!isReversing) {
                     player?.pause()
+                }
+                val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                if (isLocked) {
+                    isUserUnlocked = false
                 }
             }
         }
@@ -510,6 +536,9 @@ open class LiveWallpaperService : WallpaperService() {
             Log.d(tag, "handleScreenOn: trigger=${prefs.trigger}")
             stopReversePlayback()
             val isLocked = keyguardManager?.isKeyguardLocked ?: false
+            if (!isLocked) {
+                isUserUnlocked = true
+            }
             when (prefs.trigger) {
                 PlaybackTrigger.SCREEN_ON -> {
                     if (!hasPlayedThisSession) {
@@ -519,7 +548,8 @@ open class LiveWallpaperService : WallpaperService() {
                     }
                 }
                 PlaybackTrigger.SCREEN_UNLOCK -> {
-                    if (isLocked) {
+                    val isLockScreen = !isUserUnlocked && isLocked
+                    if (isLockScreen) {
                         hasPlayedThisSession = false
                         val p = player
                         val fwdItem = forwardMediaItem
@@ -529,6 +559,10 @@ open class LiveWallpaperService : WallpaperService() {
                         }
                         player?.seekTo(0)
                         player?.pause()
+                    } else if (isUserUnlocked && !hasPlayedThisSession) {
+                        if (replayVideo()) {
+                            hasPlayedThisSession = true
+                        }
                     }
                 }
             }
@@ -537,12 +571,11 @@ open class LiveWallpaperService : WallpaperService() {
         private fun handleUserPresent() {
             Log.d(tag, "handleUserPresent: trigger=${prefs.trigger}")
             stopReversePlayback()
+            isUserUnlocked = true
             // Fired whenever the device is unlocked!
             if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
-                if (!hasPlayedThisSession) {
-                    if (replayVideo()) {
-                        hasPlayedThisSession = true
-                    }
+                if (replayVideo()) {
+                    hasPlayedThisSession = true
                 }
             }
         }
@@ -550,6 +583,7 @@ open class LiveWallpaperService : WallpaperService() {
         private fun handleScreenOff() {
             val aodOn = isAodEnabled()
             Log.d(tag, "handleScreenOff: AOD enabled=$aodOn")
+            isUserUnlocked = false
             hasPlayedThisSession = false
             if (aodOn) {
                 playInReverse()
@@ -574,6 +608,9 @@ open class LiveWallpaperService : WallpaperService() {
                 p.setVideoSurface(surface)
                 if (p.currentMediaItem != fwdItem) {
                     p.setMediaItem(fwdItem)
+                    p.prepare()
+                } else if (p.playbackState == Player.STATE_IDLE) {
+                    p.prepare()
                 }
                 p.videoScalingMode = getDesiredScalingMode()
                 p.seekTo(0)
@@ -605,6 +642,7 @@ open class LiveWallpaperService : WallpaperService() {
                 WallpaperPreferences.KEY_TRIGGER -> {
                     hasPlayedThisSession = false
                     val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                    isUserUnlocked = !isLocked
                     if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK && isLocked) {
                         val p = player
                         val fwdItem = forwardMediaItem
