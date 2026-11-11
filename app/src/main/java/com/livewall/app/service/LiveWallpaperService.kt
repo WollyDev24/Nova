@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -53,6 +54,7 @@ open class LiveWallpaperService : WallpaperService() {
         private var isScreenVisible = false
         private var isUserUnlocked = false
         private var hasPlayedThisSession = false
+        private var unlockMonitorJob: Job? = null
         private var cachedWallpaperColors: WallpaperColors? = null
         private var reversePlaybackJob: Job? = null
         private var isReversing = false
@@ -91,7 +93,7 @@ open class LiveWallpaperService : WallpaperService() {
             }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                    registerReceiver(screenReceiver, filter, Context.RECEIVER_EXPORTED)
                 } else {
                     registerReceiver(screenReceiver, filter)
                 }
@@ -320,6 +322,7 @@ open class LiveWallpaperService : WallpaperService() {
                     }
                     player?.seekTo(0)
                     player?.pause()
+                    startUnlockMonitor()
                     return
                 }
 
@@ -347,6 +350,42 @@ open class LiveWallpaperService : WallpaperService() {
                     isUserUnlocked = false
                 }
             }
+        }
+
+        override fun onOffsetsChanged(
+            xOffset: Float,
+            yOffset: Float,
+            xOffsetStep: Float,
+            yOffsetStep: Float,
+            xPixelOffset: Int,
+            yPixelOffset: Int
+        ) {
+            super.onOffsetsChanged(xOffset, yOffset, xOffsetStep, yOffsetStep, xPixelOffset, yPixelOffset)
+            if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK && !isUserUnlocked && isScreenVisible) {
+                val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                if (!isLocked) {
+                    Log.d(tag, "onOffsetsChanged detected Keyguard unlocked!")
+                    handleUserPresent()
+                }
+            }
+        }
+
+        override fun onCommand(
+            action: String,
+            x: Int,
+            y: Int,
+            z: Int,
+            extras: Bundle?,
+            resultRequested: Boolean
+        ): Bundle? {
+            if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK && !isUserUnlocked && isScreenVisible) {
+                val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                if (!isLocked) {
+                    Log.d(tag, "onCommand($action) detected Keyguard unlocked!")
+                    handleUserPresent()
+                }
+            }
+            return super.onCommand(action, x, y, z, extras, resultRequested)
         }
 
         private fun isAodEnabled(): Boolean {
@@ -532,6 +571,23 @@ open class LiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun startUnlockMonitor() {
+            unlockMonitorJob?.cancel()
+            if (prefs.trigger != PlaybackTrigger.SCREEN_UNLOCK || isUserUnlocked) return
+            Log.d(tag, "startUnlockMonitor: actively watching for Keyguard unlock")
+            unlockMonitorJob = CoroutineScope(Dispatchers.Main.immediate).launch {
+                while (isActive && isScreenVisible && !isUserUnlocked) {
+                    val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                    if (!isLocked) {
+                        Log.d(tag, "Unlock monitor detected Keyguard unlocked!")
+                        handleUserPresent()
+                        break
+                    }
+                    delay(50)
+                }
+            }
+        }
+
         private fun handleScreenOn() {
             Log.d(tag, "handleScreenOn: trigger=${prefs.trigger}")
             stopReversePlayback()
@@ -559,6 +615,7 @@ open class LiveWallpaperService : WallpaperService() {
                         }
                         player?.seekTo(0)
                         player?.pause()
+                        startUnlockMonitor()
                     } else if (isUserUnlocked && !hasPlayedThisSession) {
                         if (replayVideo()) {
                             hasPlayedThisSession = true
@@ -570,6 +627,8 @@ open class LiveWallpaperService : WallpaperService() {
 
         private fun handleUserPresent() {
             Log.d(tag, "handleUserPresent: trigger=${prefs.trigger}")
+            unlockMonitorJob?.cancel()
+            unlockMonitorJob = null
             stopReversePlayback()
             isUserUnlocked = true
             // Fired whenever the device is unlocked!
@@ -583,6 +642,8 @@ open class LiveWallpaperService : WallpaperService() {
         private fun handleScreenOff() {
             val aodOn = isAodEnabled()
             Log.d(tag, "handleScreenOff: AOD enabled=$aodOn")
+            unlockMonitorJob?.cancel()
+            unlockMonitorJob = null
             isUserUnlocked = false
             hasPlayedThisSession = false
             if (aodOn) {
@@ -659,6 +720,8 @@ open class LiveWallpaperService : WallpaperService() {
 
         override fun onDestroy() {
             super.onDestroy()
+            unlockMonitorJob?.cancel()
+            unlockMonitorJob = null
             stopReversePlayback()
             try {
                 if (wakeLock?.isHeld == true) {
