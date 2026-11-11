@@ -76,6 +76,7 @@ fun VideoPlayerView(
             } else {
                 C.VIDEO_SCALING_MODE_SCALE_TO_FIT
             }
+            this.setSeekParameters(androidx.media3.exoplayer.SeekParameters.EXACT)
             try {
                 val uri = Uri.parse(videoUri)
                 val mediaItem = if (videoUri.startsWith("http://") || videoUri.startsWith("https://")) {

@@ -26,6 +26,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
@@ -122,6 +123,7 @@ open class LiveWallpaperService : WallpaperService() {
                     repeatMode = Player.REPEAT_MODE_OFF
                     volume = 0f
                     videoScalingMode = scaling
+                    setSeekParameters(SeekParameters.EXACT)
 
                     addListener(object : Player.Listener {
                         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -272,15 +274,26 @@ open class LiveWallpaperService : WallpaperService() {
             player?.videoScalingMode = scaling
             setSurfaceFrameRate(120f)
             updateWallpaperColors()
+            val curve = activeCurve
             if (isPreview) {
-                replayVideo()
+                if (curve != null && curve.isSplit) {
+                    player?.seekTo(curve.startPauseValueMs)
+                    player?.pause()
+                } else {
+                    replayVideo()
+                }
             } else if (isScreenVisible) {
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
                 if (!isLocked) {
                     isUserUnlocked = true
                 }
                 val isLockScreen = !isUserUnlocked && isLocked
-                if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
+                if (isLockScreen && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+                    val restPos = curve?.startPauseValueMs ?: 0L
+                    player?.seekTo(restPos)
+                    player?.pause()
+                    startUnlockMonitor()
+                } else if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
                     if (!hasPlayedThisSession || prefs.replayOnHomeReturn) {
                         if (playUnlockTransition()) {
                             hasPlayedThisSession = true
@@ -303,7 +316,13 @@ open class LiveWallpaperService : WallpaperService() {
                     isUserUnlocked = true
                 }
                 val isLockScreen = !isUserUnlocked && isLocked
-                if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
+                val curve = activeCurve
+                if (isLockScreen && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+                    val restPos = curve?.startPauseValueMs ?: 0L
+                    player?.seekTo(restPos)
+                    player?.pause()
+                    startUnlockMonitor()
+                } else if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
                     if (playUnlockTransition()) {
                         hasPlayedThisSession = true
                     }
@@ -323,8 +342,14 @@ open class LiveWallpaperService : WallpaperService() {
             isScreenVisible = visible
             if (visible) {
                 stopReversePlayback()
+                val curve = activeCurve
                 if (isPreview) {
-                    replayVideo()
+                    if (curve != null && curve.isSplit) {
+                        player?.seekTo(curve.startPauseValueMs)
+                        player?.pause()
+                    } else {
+                        replayVideo()
+                    }
                     return
                 }
 
@@ -341,7 +366,7 @@ open class LiveWallpaperService : WallpaperService() {
                         p.setMediaItem(fwdItem)
                         p.videoScalingMode = getDesiredScalingMode()
                     }
-                    val restPos = activeCurve?.startPauseValueMs ?: 0L
+                    val restPos = curve?.startPauseValueMs ?: 0L
                     player?.seekTo(restPos)
                     player?.pause()
                     startUnlockMonitor()
@@ -359,7 +384,7 @@ open class LiveWallpaperService : WallpaperService() {
                         }
                     }
                 } else {
-                    if (replayVideo()) {
+                    if (playUnlockTransition()) {
                         hasPlayedThisSession = true
                     }
                 }
@@ -383,11 +408,21 @@ open class LiveWallpaperService : WallpaperService() {
             yPixelOffset: Int
         ) {
             super.onOffsetsChanged(xOffset, yOffset, xOffsetStep, yOffsetStep, xPixelOffset, yPixelOffset)
-            if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK && !isUserUnlocked && isScreenVisible) {
-                val isLocked = keyguardManager?.isKeyguardLocked ?: false
-                if (!isLocked) {
-                    Log.d(tag, "onOffsetsChanged detected Keyguard unlocked!")
-                    handleUserPresent()
+            val isLocked = keyguardManager?.isKeyguardLocked ?: false
+            if (!isLocked && !isUserUnlocked && isScreenVisible) {
+                Log.d(tag, "onOffsetsChanged detected Keyguard unlocked!")
+                handleUserPresent()
+                return
+            }
+
+            // Lockscreen swipe-to-unlock gesture scrubbing:
+            val curve = activeCurve
+            if (curve != null && curve.isSplit && !isUserUnlocked && isLocked && !isTouchDragging) {
+                val swipeProgress = yOffset.coerceIn(0f, 1f)
+                if (swipeProgress > 0f) {
+                    val restPos = curve.startPauseValueMs
+                    val targetMs = (restPos + (splitPositionMs - restPos) * swipeProgress).toLong().coerceIn(0L, splitPositionMs)
+                    player?.seekTo(targetMs)
                 }
             }
         }
@@ -416,8 +451,8 @@ open class LiveWallpaperService : WallpaperService() {
             val isLocked = keyguardManager?.isKeyguardLocked ?: false
             val isLockScreen = !isUserUnlocked && isLocked
 
-            // Only enable interactive scrubbing on the lock screen when a curve is present
-            if (curve == null || !isLockScreen || !curve.isSupportCurve) {
+            // Enable interactive scrubbing on lock screen or in wallpaper picker preview
+            if (curve == null || (!isLockScreen && !isPreview) || !curve.isSupportCurve) {
                 return
             }
 
@@ -801,8 +836,20 @@ open class LiveWallpaperService : WallpaperService() {
                     p.prepare()
                 }
                 p.videoScalingMode = getDesiredScalingMode()
-                p.seekTo(0)
-                p.play()
+                val curve = activeCurve
+                if (curve != null && curve.isSplit) {
+                    val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                    val isLockScreen = !isUserUnlocked && isLocked
+                    if (isLockScreen) {
+                        p.seekTo(curve.startPauseValueMs)
+                        p.pause()
+                    } else {
+                        return playUnlockTransition()
+                    }
+                } else {
+                    p.seekTo(0)
+                    p.play()
+                }
                 return true
             }
             Log.d(tag, "replayVideo deferred: surface is not yet valid")

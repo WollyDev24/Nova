@@ -82,6 +82,7 @@ import com.livewall.app.model.WallpaperItem
 import com.livewall.app.service.WallpaperColorHelper
 import com.livewall.app.ui.components.VideoPlayerView
 import com.livewall.app.ui.theme.ShapePill
+import com.livewall.app.util.WallpaperAnimationHelper
 import com.livewall.app.util.WallpaperDownloader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -338,8 +339,16 @@ fun PreviewSheet(
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .clickable {
-                                    playerInstance?.seekTo(0)
-                                    playerInstance?.play()
+                                    val curve = WallpaperAnimationHelper.getCurveForWallpaper(context, currentWallpaper.id)
+                                    if (curve != null && curve.isSplit) {
+                                        val dur = playerInstance?.duration ?: 4333L
+                                        val splitMs = if (dur > 0) ((curve.splitIndex.toFloat() / 260f) * dur).toLong() else 3000L
+                                        playerInstance?.seekTo(splitMs)
+                                        playerInstance?.play()
+                                    } else {
+                                        playerInstance?.seekTo(0)
+                                        playerInstance?.play()
+                                    }
                                 }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
