@@ -343,6 +343,13 @@ open class LiveWallpaperService : WallpaperService() {
             Log.d(tag, "onVisibilityChanged: visible=$visible, isUserUnlocked=$isUserUnlocked, isReversing=$isReversing")
             isScreenVisible = visible
             if (visible) {
+                val interactive = isScreenInteractive()
+                // If AOD is visible while screen is non-interactive or actively reversing, preserve AOD reverse state
+                if (!interactive || isReversing) {
+                    Log.d(tag, "onVisibilityChanged(true) during AOD/non-interactive: preserving AOD reverse state")
+                    return
+                }
+
                 stopReversePlayback()
                 val curve = activeCurve
                 if (isPreview) {
@@ -586,6 +593,11 @@ open class LiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun isScreenInteractive(): Boolean {
+            val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            return pm?.isInteractive ?: true
+        }
+
         private fun isAodEnabled(): Boolean {
             return try {
                 val cr = applicationContext.contentResolver
@@ -655,8 +667,13 @@ open class LiveWallpaperService : WallpaperService() {
                 val p = player
                 val fwdItem = forwardMediaItem
                 if (p != null && fwdItem != null) {
-                    val revPos = p.currentPosition
-                    val fwdPos = (videoDurationMs - revPos).coerceIn(0L, videoDurationMs)
+                    val revItem = reverseMediaItem
+                    val currentPos = p.currentPosition
+                    val fwdPos = if (hasReverseVideo && revItem != null && p.currentMediaItem == revItem) {
+                        (videoDurationMs - currentPos).coerceIn(0L, videoDurationMs)
+                    } else {
+                        currentPos
+                    }
                     Log.d(tag, "Transferring back to forwardMediaItem at fwdPos $fwdPos")
                     if (p.currentMediaItem != fwdItem) {
                         p.setMediaItem(fwdItem)
@@ -740,17 +757,22 @@ open class LiveWallpaperService : WallpaperService() {
                 return
             }
 
-            // Fallback: Seek backwards smoothly for any custom video without a reverse track
+            // Fallback: Seek backwards smoothly for any video without a dedicated reverse track
             p.pause()
-            val durationMs = currentForwardPos
+            val reverseDurationMs = 500L
             val startTime = SystemClock.uptimeMillis()
 
             reversePlaybackJob = CoroutineScope(Dispatchers.Main.immediate).launch {
                 try {
-                    while (isActive) {
+                    while (isActive && isReversing) {
                         val elapsed = SystemClock.uptimeMillis() - startTime
-                        val fraction = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
-                        val targetPos = (currentForwardPos * (1f - fraction)).toLong()
+                        val fraction = (elapsed.toFloat() / reverseDurationMs).coerceIn(0f, 1f)
+                        val factor = if (fraction < 0.5f) {
+                            2f * fraction * fraction
+                        } else {
+                            1f - (-2f * fraction + 2f) * (-2f * fraction + 2f) / 2f
+                        }
+                        val targetPos = (currentForwardPos * (1f - factor)).toLong()
 
                         p.seekTo(targetPos)
 
@@ -759,7 +781,7 @@ open class LiveWallpaperService : WallpaperService() {
                             p.pause()
                             break
                         }
-                        delay(33)
+                        delay(16)
                     }
                 } finally {
                     if (isReversing) {
@@ -875,10 +897,7 @@ open class LiveWallpaperService : WallpaperService() {
                 p.videoScalingMode = getDesiredScalingMode()
             }
 
-            if (curve != null && curve.isSplit) {
-                player?.pause()
-                player?.seekTo(0)
-            } else if (aodOn) {
+            if (aodOn || curve != null || prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
                 playInReverse()
             } else {
                 player?.pause()
