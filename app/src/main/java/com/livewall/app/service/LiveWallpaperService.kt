@@ -71,6 +71,7 @@ open class LiveWallpaperService : WallpaperService() {
         private var touchStartY = 0f
         private var isTouchDragging = false
         private var springSnapJob: Job? = null
+        private var breathingJob: Job? = null
 
         private val screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -277,30 +278,29 @@ open class LiveWallpaperService : WallpaperService() {
             val curve = activeCurve
             if (isPreview) {
                 if (curve != null && curve.isSplit) {
-                    player?.seekTo(curve.startPauseValueMs)
-                    player?.pause()
+                    startLockScreenBreathing(curve)
                 } else {
                     replayVideo()
                 }
             } else if (isScreenVisible) {
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
-                if (!isLocked) {
-                    isUserUnlocked = true
+                if (isLocked) {
+                    isUserUnlocked = false
                 }
-                val isLockScreen = !isUserUnlocked && isLocked
-                if (isLockScreen && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
-                    val restPos = curve?.startPauseValueMs ?: 0L
-                    player?.seekTo(restPos)
-                    player?.pause()
-                    startUnlockMonitor()
-                } else if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
-                    if (!hasPlayedThisSession || prefs.replayOnHomeReturn) {
-                        if (playUnlockTransition()) {
-                            hasPlayedThisSession = true
-                        }
-                    } else if (player?.playbackState != Player.STATE_ENDED) {
-                        player?.play()
+                if (!isUserUnlocked) {
+                    if (curve != null && curve.isSplit) {
+                        startLockScreenBreathing(curve)
+                    } else if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+                        player?.seekTo(0L)
+                        player?.pause()
                     }
+                    startUnlockMonitor()
+                } else if (!hasPlayedThisSession || prefs.replayOnHomeReturn) {
+                    if (playUnlockTransition()) {
+                        hasPlayedThisSession = true
+                    }
+                } else if (player?.playbackState != Player.STATE_ENDED) {
+                    player?.play()
                 }
             }
         }
@@ -312,17 +312,19 @@ open class LiveWallpaperService : WallpaperService() {
             setSurfaceFrameRate(120f)
             if (isScreenVisible && !hasPlayedThisSession) {
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
-                if (!isLocked) {
-                    isUserUnlocked = true
+                if (isLocked) {
+                    isUserUnlocked = false
                 }
-                val isLockScreen = !isUserUnlocked && isLocked
                 val curve = activeCurve
-                if (isLockScreen && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
-                    val restPos = curve?.startPauseValueMs ?: 0L
-                    player?.seekTo(restPos)
-                    player?.pause()
+                if (!isUserUnlocked) {
+                    if (curve != null && curve.isSplit) {
+                        startLockScreenBreathing(curve)
+                    } else if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+                        player?.seekTo(0L)
+                        player?.pause()
+                    }
                     startUnlockMonitor()
-                } else if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
+                } else {
                     if (playUnlockTransition()) {
                         hasPlayedThisSession = true
                     }
@@ -345,8 +347,7 @@ open class LiveWallpaperService : WallpaperService() {
                 val curve = activeCurve
                 if (isPreview) {
                     if (curve != null && curve.isSplit) {
-                        player?.seekTo(curve.startPauseValueMs)
-                        player?.pause()
+                        startLockScreenBreathing(curve)
                     } else {
                         replayVideo()
                     }
@@ -354,24 +355,35 @@ open class LiveWallpaperService : WallpaperService() {
                 }
 
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
-                if (!isLocked) {
-                    isUserUnlocked = true
+                if (isLocked) {
+                    isUserUnlocked = false
                 }
-                val isLockScreen = !isUserUnlocked && isLocked
-                if (isLockScreen && prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
-                    // Holding on lock screen
-                    val p = player
-                    val fwdItem = forwardMediaItem
-                    if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
-                        p.setMediaItem(fwdItem)
-                        p.videoScalingMode = getDesiredScalingMode()
+
+                if (!isUserUnlocked) {
+                    // Holding on lock screen - start breathing or pause
+                    if (curve != null && curve.isSplit) {
+                        startLockScreenBreathing(curve)
+                    } else if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+                        val p = player
+                        val fwdItem = forwardMediaItem
+                        if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
+                            p.setMediaItem(fwdItem)
+                            p.videoScalingMode = getDesiredScalingMode()
+                        }
+                        player?.seekTo(0L)
+                        player?.pause()
+                    } else {
+                        if (playUnlockTransition()) {
+                            hasPlayedThisSession = true
+                        }
                     }
-                    val restPos = curve?.startPauseValueMs ?: 0L
-                    player?.seekTo(restPos)
-                    player?.pause()
                     startUnlockMonitor()
                     return
                 }
+
+                // If already unlocked (on home screen):
+                breathingJob?.cancel()
+                breathingJob = null
 
                 if (hasPlayedThisSession) {
                     if (prefs.replayOnHomeReturn) {
@@ -389,6 +401,8 @@ open class LiveWallpaperService : WallpaperService() {
                     }
                 }
             } else {
+                breathingJob?.cancel()
+                breathingJob = null
                 if (!isReversing) {
                     player?.pause()
                 }
@@ -417,12 +431,16 @@ open class LiveWallpaperService : WallpaperService() {
 
             // Lockscreen swipe-to-unlock gesture scrubbing:
             val curve = activeCurve
-            if (curve != null && curve.isSplit && !isUserUnlocked && isLocked && !isTouchDragging) {
+            if (curve != null && curve.isSplit && !isUserUnlocked && !isTouchDragging) {
                 val swipeProgress = yOffset.coerceIn(0f, 1f)
-                if (swipeProgress > 0f) {
+                if (swipeProgress > 0.05f) {
+                    breathingJob?.cancel()
+                    breathingJob = null
                     val restPos = curve.startPauseValueMs
                     val targetMs = (restPos + (splitPositionMs - restPos) * swipeProgress).toLong().coerceIn(0L, splitPositionMs)
                     player?.seekTo(targetMs)
+                } else if (breathingJob?.isActive != true) {
+                    startLockScreenBreathing(curve)
                 }
             }
         }
@@ -435,7 +453,7 @@ open class LiveWallpaperService : WallpaperService() {
             extras: Bundle?,
             resultRequested: Boolean
         ): Bundle? {
-            if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK && !isUserUnlocked && isScreenVisible) {
+            if (!isUserUnlocked && isScreenVisible) {
                 val isLocked = keyguardManager?.isKeyguardLocked ?: false
                 if (!isLocked) {
                     Log.d(tag, "onCommand($action) detected Keyguard unlocked!")
@@ -448,8 +466,7 @@ open class LiveWallpaperService : WallpaperService() {
         override fun onTouchEvent(event: MotionEvent) {
             super.onTouchEvent(event)
             val curve = activeCurve
-            val isLocked = keyguardManager?.isKeyguardLocked ?: false
-            val isLockScreen = !isUserUnlocked && isLocked
+            val isLockScreen = !isUserUnlocked
 
             // Enable interactive scrubbing on lock screen or in wallpaper picker preview
             if (curve == null || (!isLockScreen && !isPreview) || !curve.isSupportCurve) {
@@ -460,6 +477,8 @@ open class LiveWallpaperService : WallpaperService() {
                 MotionEvent.ACTION_DOWN -> {
                     touchStartY = event.y
                     isTouchDragging = true
+                    breathingJob?.cancel()
+                    breathingJob = null
                     springSnapJob?.cancel()
                     springSnapJob = null
                 }
@@ -483,11 +502,62 @@ open class LiveWallpaperService : WallpaperService() {
             }
         }
 
+        private fun startLockScreenBreathing(curve: WallpaperAnimationCurve) {
+            breathingJob?.cancel()
+            val p = player ?: return
+            val fwdItem = forwardMediaItem ?: return
+            if (p.currentMediaItem != fwdItem) {
+                p.setMediaItem(fwdItem)
+                p.videoScalingMode = getDesiredScalingMode()
+            }
+            p.pause()
+
+            breathingJob = CoroutineScope(Dispatchers.Main.immediate).launch {
+                val restPos = curve.startPauseValueMs
+                val amplitude = 280L
+                val cycleDuration = 3200.0 // 3.2 second natural breathing rhythm
+
+                // Initial breath-in wake-up animation from 0 to restPos if waking from black/0
+                val startPos = p.currentPosition
+                if (startPos < restPos - 120L) {
+                    val wakeDuration = 700L
+                    val wakeStart = SystemClock.uptimeMillis()
+                    while (isActive && !isUserUnlocked && !isTouchDragging) {
+                        val elapsed = SystemClock.uptimeMillis() - wakeStart
+                        val fraction = (elapsed.toFloat() / wakeDuration).coerceIn(0f, 1f)
+                        val eased = 1f - (1f - fraction) * (1f - fraction)
+                        val pos = (startPos + (restPos - startPos) * eased).toLong()
+                        p.seekTo(pos)
+                        if (fraction >= 1f) break
+                        delay(20)
+                    }
+                }
+
+                p.seekTo(restPos)
+                val baseTime = SystemClock.uptimeMillis()
+
+                // Continuous subtle breathing loop on lock screen
+                while (isActive && !isUserUnlocked && !isTouchDragging) {
+                    val elapsed = SystemClock.uptimeMillis() - baseTime
+                    val phase = (elapsed % cycleDuration) / cycleDuration
+                    val offset = (kotlin.math.sin(phase * 2.0 * Math.PI) * amplitude).toLong()
+                    val targetPos = (restPos + offset).coerceIn(0L, splitPositionMs)
+                    p.seekTo(targetPos)
+                    delay(25)
+                }
+            }
+        }
+
         private fun animateSpringBackToRest(curve: WallpaperAnimationCurve) {
             val p = player ?: return
             val currentPos = p.currentPosition
             val restPos = curve.startPauseValueMs
-            if (currentPos == restPos) return
+            if (currentPos == restPos) {
+                if (!isUserUnlocked) {
+                    startLockScreenBreathing(curve)
+                }
+                return
+            }
 
             springSnapJob?.cancel()
             springSnapJob = CoroutineScope(Dispatchers.Main.immediate).launch {
@@ -506,6 +576,9 @@ open class LiveWallpaperService : WallpaperService() {
                     if (t >= 1f) {
                         p.seekTo(restPos)
                         p.pause()
+                        if (!isUserUnlocked) {
+                            startLockScreenBreathing(curve)
+                        }
                         break
                     }
                     delay(16)
@@ -698,9 +771,14 @@ open class LiveWallpaperService : WallpaperService() {
 
         private fun startUnlockMonitor() {
             unlockMonitorJob?.cancel()
-            if (prefs.trigger != PlaybackTrigger.SCREEN_UNLOCK || isUserUnlocked) return
+            val curve = activeCurve
+            if (curve == null && prefs.trigger != PlaybackTrigger.SCREEN_UNLOCK) return
+            if (isUserUnlocked) return
+
             Log.d(tag, "startUnlockMonitor: actively watching for Keyguard unlock")
             unlockMonitorJob = CoroutineScope(Dispatchers.Main.immediate).launch {
+                // Initial delay to avoid false positive during wake-up transition
+                delay(150)
                 while (isActive && isScreenVisible && !isUserUnlocked) {
                     val isLocked = keyguardManager?.isKeyguardLocked ?: false
                     if (!isLocked) {
@@ -716,37 +794,36 @@ open class LiveWallpaperService : WallpaperService() {
         private fun handleScreenOn() {
             Log.d(tag, "handleScreenOn: trigger=${prefs.trigger}")
             stopReversePlayback()
+            val curve = activeCurve
             val isLocked = keyguardManager?.isKeyguardLocked ?: false
-            if (!isLocked) {
-                isUserUnlocked = true
+            if (isLocked) {
+                isUserUnlocked = false
             }
-            when (prefs.trigger) {
-                PlaybackTrigger.SCREEN_ON -> {
+
+            if (!isUserUnlocked) {
+                if (curve != null && curve.isSplit) {
+                    startLockScreenBreathing(curve)
+                } else if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+                    hasPlayedThisSession = false
+                    val p = player
+                    val fwdItem = forwardMediaItem
+                    if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
+                        p.setMediaItem(fwdItem)
+                        p.videoScalingMode = getDesiredScalingMode()
+                    }
+                    player?.seekTo(0L)
+                    player?.pause()
+                } else {
                     if (!hasPlayedThisSession) {
                         if (replayVideo()) {
                             hasPlayedThisSession = true
                         }
                     }
                 }
-                PlaybackTrigger.SCREEN_UNLOCK -> {
-                    val isLockScreen = !isUserUnlocked && isLocked
-                    if (isLockScreen) {
-                        hasPlayedThisSession = false
-                        val p = player
-                        val fwdItem = forwardMediaItem
-                        if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
-                            p.setMediaItem(fwdItem)
-                            p.videoScalingMode = getDesiredScalingMode()
-                        }
-                        val restPos = activeCurve?.startPauseValueMs ?: 0L
-                        player?.seekTo(restPos)
-                        player?.pause()
-                        startUnlockMonitor()
-                    } else if (isUserUnlocked && !hasPlayedThisSession) {
-                        if (playUnlockTransition()) {
-                            hasPlayedThisSession = true
-                        }
-                    }
+                startUnlockMonitor()
+            } else if (!hasPlayedThisSession) {
+                if (playUnlockTransition()) {
+                    hasPlayedThisSession = true
                 }
             }
         }
@@ -757,11 +834,19 @@ open class LiveWallpaperService : WallpaperService() {
             unlockMonitorJob = null
             springSnapJob?.cancel()
             springSnapJob = null
+            breathingJob?.cancel()
+            breathingJob = null
             isTouchDragging = false
             stopReversePlayback()
             isUserUnlocked = true
+
             // Fired whenever the device is unlocked!
-            if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
+            val curve = activeCurve
+            if (curve != null && curve.isSplit) {
+                if (playUnlockTransition()) {
+                    hasPlayedThisSession = true
+                }
+            } else if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
                 if (playUnlockTransition()) {
                     hasPlayedThisSession = true
                 }
@@ -775,22 +860,29 @@ open class LiveWallpaperService : WallpaperService() {
             unlockMonitorJob = null
             springSnapJob?.cancel()
             springSnapJob = null
+            breathingJob?.cancel()
+            breathingJob = null
             isTouchDragging = false
             isUserUnlocked = false
             hasPlayedThisSession = false
-            if (aodOn) {
+            stopReversePlayback()
+
+            val curve = activeCurve
+            val p = player
+            val fwdItem = forwardMediaItem
+            if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
+                p.setMediaItem(fwdItem)
+                p.videoScalingMode = getDesiredScalingMode()
+            }
+
+            if (curve != null && curve.isSplit) {
+                player?.pause()
+                player?.seekTo(0)
+            } else if (aodOn) {
                 playInReverse()
             } else {
-                stopReversePlayback()
-                val p = player
-                val fwdItem = forwardMediaItem
-                if (p != null && fwdItem != null && p.currentMediaItem != fwdItem) {
-                    p.setMediaItem(fwdItem)
-                    p.videoScalingMode = getDesiredScalingMode()
-                }
-                val restPos = activeCurve?.startPauseValueMs ?: 0L
                 player?.pause()
-                player?.seekTo(restPos)
+                player?.seekTo(0)
             }
         }
 
@@ -898,6 +990,8 @@ open class LiveWallpaperService : WallpaperService() {
             unlockMonitorJob = null
             springSnapJob?.cancel()
             springSnapJob = null
+            breathingJob?.cancel()
+            breathingJob = null
             stopReversePlayback()
             try {
                 if (wakeLock?.isHeld == true) {

@@ -132,6 +132,38 @@ fun PreviewSheet(
         WallpaperColorHelper.getWallpaperColorsRgb(context, currentWallpaper)
     }
 
+    val currentCurve = remember(currentWallpaper.id) {
+        WallpaperAnimationHelper.getCurveForWallpaper(context, currentWallpaper.id)
+    }
+    var previewCurveMode by remember(currentWallpaper.id) { mutableIntStateOf(0) } // 0 = Lock Breathing, 1 = Unlock Transition
+
+    LaunchedEffect(currentWallpaper.id, playerInstance, previewCurveMode) {
+        val p = playerInstance ?: return@LaunchedEffect
+        val curve = currentCurve
+        if (curve != null && curve.isSplit) {
+            if (previewCurveMode == 0) {
+                p.pause()
+                val restPos = curve.startPauseValueMs
+                val amplitude = 280L
+                val cycleDuration = 3200.0
+                val baseTime = android.os.SystemClock.uptimeMillis()
+                while (true) {
+                    val elapsed = android.os.SystemClock.uptimeMillis() - baseTime
+                    val phase = (elapsed % cycleDuration) / cycleDuration
+                    val offset = (kotlin.math.sin(phase * 2.0 * Math.PI) * amplitude).toLong()
+                    val targetPos = (restPos + offset).coerceIn(0L, ((curve.splitIndex.toFloat() / 260f) * 4333L).toLong())
+                    p.seekTo(targetPos)
+                    kotlinx.coroutines.delay(25)
+                }
+            } else {
+                val dur = if (p.duration > 0) p.duration else 4333L
+                val splitMs = ((curve.splitIndex.toFloat() / 260f) * dur).toLong()
+                p.seekTo(splitMs)
+                p.play()
+            }
+        }
+    }
+
     // Full-screen immersive dialog: preview fills the entire display edge-to-edge
     Dialog(
         onDismissRequest = onDismiss,
@@ -174,11 +206,12 @@ fun PreviewSheet(
                         val playableUri = remember(item.id, downloadVersion) {
                             WallpaperDownloader.getPlayableUri(context, item)
                         }
+                        val isCurve = currentCurve != null && currentCurve.isSplit
                         VideoPlayerView(
                             videoUri = playableUri,
                             scalingMode = ScalingMode.CROP,
                             isMuted = true,
-                            autoPlay = true,
+                            autoPlay = !isCurve,
                             repeatMode = Player.REPEAT_MODE_OFF,
                             onPlayerReady = { playerInstance = it },
                             modifier = Modifier.fillMaxSize()
@@ -299,8 +332,9 @@ fun PreviewSheet(
                             color = Color.White
                         )
                         val counterText = if (wallpapers.size > 1) " • ${pagerState.currentPage + 1}/${wallpapers.size}" else ""
+                        val curveBadge = if (currentCurve != null && currentCurve.isSplit) " • Dynamic Curve" else ""
                         Text(
-                            text = "${currentWallpaper.collection}$counterText",
+                            text = "${currentWallpaper.collection}$counterText$curveBadge",
                             style = MaterialTheme.typography.labelSmall,
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.8f)
@@ -308,8 +342,31 @@ fun PreviewSheet(
                     }
                 }
 
-                // Action Pills: Palette Flyout & Replay
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Action Pills: Mode Toggle (if curve), Palette Flyout & Replay
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (currentCurve != null && currentCurve.isSplit && isCurrentDownloaded) {
+                        Surface(
+                            shape = ShapePill,
+                            color = if (previewCurveMode == 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.60f),
+                            contentColor = Color.White,
+                            shadowElevation = 6.dp,
+                            modifier = Modifier
+                                .height(44.dp)
+                                .clip(ShapePill)
+                                .clickable {
+                                    previewCurveMode = if (previewCurveMode == 0) 1 else 0
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp)) {
+                                Text(
+                                    text = if (previewCurveMode == 0) "Lock: Breathing" else "Unlock Transition",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
                     // Palette Flyout Trigger Button (Rewired to open colors flyout)
                     Surface(
                         shape = CircleShape,
@@ -339,12 +396,16 @@ fun PreviewSheet(
                                 .size(44.dp)
                                 .clip(CircleShape)
                                 .clickable {
-                                    val curve = WallpaperAnimationHelper.getCurveForWallpaper(context, currentWallpaper.id)
+                                    val curve = currentCurve
                                     if (curve != null && curve.isSplit) {
-                                        val dur = playerInstance?.duration ?: 4333L
-                                        val splitMs = if (dur > 0) ((curve.splitIndex.toFloat() / 260f) * dur).toLong() else 3000L
-                                        playerInstance?.seekTo(splitMs)
-                                        playerInstance?.play()
+                                        if (previewCurveMode == 1) {
+                                            val dur = playerInstance?.duration ?: 4333L
+                                            val splitMs = if (dur > 0) ((curve.splitIndex.toFloat() / 260f) * dur).toLong() else 3000L
+                                            playerInstance?.seekTo(splitMs)
+                                            playerInstance?.play()
+                                        } else {
+                                            previewCurveMode = 1
+                                        }
                                     } else {
                                         playerInstance?.seekTo(0)
                                         playerInstance?.play()
