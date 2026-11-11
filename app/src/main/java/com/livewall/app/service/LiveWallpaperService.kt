@@ -311,7 +311,7 @@ open class LiveWallpaperService : WallpaperService() {
             player?.videoScalingMode = getDesiredScalingMode()
             setSurfaceFrameRate(120f)
             if (isScreenVisible && !hasPlayedThisSession) {
-                val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                val isLocked = (keyguardManager?.isKeyguardLocked == true) || (keyguardManager?.isKeyguardSecure == true)
                 if (isLocked) {
                     isUserUnlocked = false
                 }
@@ -324,7 +324,7 @@ open class LiveWallpaperService : WallpaperService() {
                         player?.pause()
                     }
                     startUnlockMonitor()
-                } else {
+                } else if (prefs.trigger == PlaybackTrigger.SCREEN_ON) {
                     if (playUnlockTransition()) {
                         hasPlayedThisSession = true
                     }
@@ -361,7 +361,7 @@ open class LiveWallpaperService : WallpaperService() {
                     return
                 }
 
-                val isLocked = keyguardManager?.isKeyguardLocked ?: false
+                val isLocked = (keyguardManager?.isKeyguardLocked == true) || (keyguardManager?.isKeyguardSecure == true)
                 if (isLocked) {
                     isUserUnlocked = false
                 }
@@ -402,7 +402,7 @@ open class LiveWallpaperService : WallpaperService() {
                             player?.play()
                         }
                     }
-                } else {
+                } else if (prefs.trigger == PlaybackTrigger.SCREEN_ON) {
                     if (playUnlockTransition()) {
                         hasPlayedThisSession = true
                     }
@@ -429,8 +429,8 @@ open class LiveWallpaperService : WallpaperService() {
             yPixelOffset: Int
         ) {
             super.onOffsetsChanged(xOffset, yOffset, xOffsetStep, yOffsetStep, xPixelOffset, yPixelOffset)
-            val isLocked = keyguardManager?.isKeyguardLocked ?: false
-            if (!isLocked && !isUserUnlocked && isScreenVisible) {
+            val isLocked = (keyguardManager?.isKeyguardLocked == true) || (keyguardManager?.isKeyguardSecure == true)
+            if (!isLocked && !isUserUnlocked && isScreenVisible && prefs.trigger != PlaybackTrigger.SCREEN_UNLOCK) {
                 Log.d(tag, "onOffsetsChanged detected Keyguard unlocked!")
                 handleUserPresent()
                 return
@@ -521,26 +521,9 @@ open class LiveWallpaperService : WallpaperService() {
 
             breathingJob = CoroutineScope(Dispatchers.Main.immediate).launch {
                 val restPos = curve.startPauseValueMs
+                p.seekTo(restPos)
                 val amplitude = 280L
                 val cycleDuration = 3200.0 // 3.2 second natural breathing rhythm
-
-                // Initial breath-in wake-up animation from 0 to restPos if waking from black/0
-                val startPos = p.currentPosition
-                if (startPos < restPos - 120L) {
-                    val wakeDuration = 700L
-                    val wakeStart = SystemClock.uptimeMillis()
-                    while (isActive && !isUserUnlocked && !isTouchDragging) {
-                        val elapsed = SystemClock.uptimeMillis() - wakeStart
-                        val fraction = (elapsed.toFloat() / wakeDuration).coerceIn(0f, 1f)
-                        val eased = 1f - (1f - fraction) * (1f - fraction)
-                        val pos = (startPos + (restPos - startPos) * eased).toLong()
-                        p.seekTo(pos)
-                        if (fraction >= 1f) break
-                        delay(20)
-                    }
-                }
-
-                p.seekTo(restPos)
                 val baseTime = SystemClock.uptimeMillis()
 
                 // Continuous subtle breathing loop on lock screen
@@ -550,7 +533,7 @@ open class LiveWallpaperService : WallpaperService() {
                     val offset = (kotlin.math.sin(phase * 2.0 * Math.PI) * amplitude).toLong()
                     val targetPos = (restPos + offset).coerceIn(0L, splitPositionMs)
                     p.seekTo(targetPos)
-                    delay(25)
+                    delay(33)
                 }
             }
         }
@@ -743,8 +726,10 @@ open class LiveWallpaperService : WallpaperService() {
                 p.play()
 
                 reversePlaybackJob = CoroutineScope(Dispatchers.Main.immediate).launch {
+                    // Allow the player 150ms to transition out of previous STATE_ENDED
+                    delay(150)
                     while (isActive && isReversing) {
-                        if (p.playbackState == Player.STATE_ENDED || p.currentPosition >= duration - 30L) {
+                        if (p.playbackState == Player.STATE_ENDED || (duration > 0 && p.currentPosition >= duration - 30L)) {
                             Log.d(tag, "Reverse playback completed naturally")
                             break
                         }
@@ -781,7 +766,7 @@ open class LiveWallpaperService : WallpaperService() {
                             p.pause()
                             break
                         }
-                        delay(16)
+                        delay(33)
                     }
                 } finally {
                     if (isReversing) {
@@ -799,16 +784,18 @@ open class LiveWallpaperService : WallpaperService() {
 
             Log.d(tag, "startUnlockMonitor: actively watching for Keyguard unlock")
             unlockMonitorJob = CoroutineScope(Dispatchers.Main.immediate).launch {
-                // Initial delay to avoid false positive during wake-up transition
-                delay(150)
+                // Wait for wake-up transition to fully settle
+                delay(350)
                 while (isActive && isScreenVisible && !isUserUnlocked) {
-                    val isLocked = keyguardManager?.isKeyguardLocked ?: false
-                    if (!isLocked) {
+                    val isSecure = keyguardManager?.isKeyguardSecure == true
+                    val isLocked = keyguardManager?.isKeyguardLocked == true
+                    // Only auto-unlock on monitor if device is completely unlocked and has no secure keyguard
+                    if (!isLocked && !isSecure) {
                         Log.d(tag, "Unlock monitor detected Keyguard unlocked!")
                         handleUserPresent()
                         break
                     }
-                    delay(50)
+                    delay(100)
                 }
             }
         }
@@ -817,7 +804,7 @@ open class LiveWallpaperService : WallpaperService() {
             Log.d(tag, "handleScreenOn: trigger=${prefs.trigger}")
             stopReversePlayback()
             val curve = activeCurve
-            val isLocked = keyguardManager?.isKeyguardLocked ?: false
+            val isLocked = (keyguardManager?.isKeyguardLocked == true) || (keyguardManager?.isKeyguardSecure == true)
             if (isLocked) {
                 isUserUnlocked = false
             }
@@ -843,7 +830,7 @@ open class LiveWallpaperService : WallpaperService() {
                     }
                 }
                 startUnlockMonitor()
-            } else if (!hasPlayedThisSession) {
+            } else if (!hasPlayedThisSession && prefs.trigger == PlaybackTrigger.SCREEN_ON) {
                 if (playUnlockTransition()) {
                     hasPlayedThisSession = true
                 }
