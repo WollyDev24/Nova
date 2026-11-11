@@ -105,6 +105,8 @@ object WallpaperColorHelper {
 
             // ColorOS 17 Flow: Sunset Orange / Amber / Coral / Flow Purple
             "coloros_17"            -> Triple(0xFFFE874F.toInt(), 0xFFEA580C.toInt(), 0xFF9C27B0.toInt())
+            // ColorOS Horizon: Twilight Violet / Electric Cyan Horizon / Dark Cosmic Navy
+            "coloros_horizon"       -> Triple(0xFF2A2846.toInt(), 0xFF3D72B8.toInt(), 0xFF16152B.toInt())
 
             // Xiaomi 18 Pro
             "xiaomi_18_pro_light01" -> Triple(0xFF1E15F3.toInt(), 0xFF111F90.toInt(), 0xFF6CB1F5.toInt()) // Electric Cobalt
@@ -346,6 +348,7 @@ object WallpaperColorHelper {
     fun getServiceClassForWallpaper(wallpaperId: String): Class<out LiveWallpaperService> {
         return when (wallpaperId) {
             "coloros_17" -> ColorOSWallpaperService::class.java
+            "coloros_horizon" -> ColorOSHorizonWallpaperService::class.java
             "xiaomi_18_pro_light01" -> XiaomiLight01WallpaperService::class.java
             "xiaomi_18_pro_light02" -> XiaomiLight02WallpaperService::class.java
             "xiaomi_18_pro_light03" -> XiaomiLight03WallpaperService::class.java
@@ -374,6 +377,7 @@ object WallpaperColorHelper {
     fun getWallpaperIdForServiceClass(serviceClass: Class<out LiveWallpaperService>): String? {
         return when (serviceClass) {
             ColorOSWallpaperService::class.java -> "coloros_17"
+            ColorOSHorizonWallpaperService::class.java -> "coloros_horizon"
             XiaomiLight01WallpaperService::class.java -> "xiaomi_18_pro_light01"
             XiaomiLight02WallpaperService::class.java -> "xiaomi_18_pro_light02"
             XiaomiLight03WallpaperService::class.java -> "xiaomi_18_pro_light03"

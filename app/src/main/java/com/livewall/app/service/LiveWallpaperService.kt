@@ -15,6 +15,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.service.wallpaper.WallpaperService
 import android.util.Log
+import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import androidx.annotation.OptIn
@@ -28,7 +29,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.livewall.app.data.PlaybackTrigger
 import com.livewall.app.data.ScalingMode
 import com.livewall.app.data.WallpaperPreferences
+import com.livewall.app.model.WallpaperAnimationCurve
 import com.livewall.app.model.WallpaperItem
+import com.livewall.app.util.WallpaperAnimationHelper
 import com.livewall.app.util.WallpaperDownloader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +65,11 @@ open class LiveWallpaperService : WallpaperService() {
         private var currentSurfaceHolder: SurfaceHolder? = null
         private var hasReverseVideo = false
         private var videoDurationMs = 2000L
+        private var activeCurve: WallpaperAnimationCurve? = null
+        private var splitPositionMs: Long = 3000L
+        private var touchStartY = 0f
+        private var isTouchDragging = false
+        private var springSnapJob: Job? = null
 
         private val screenReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -76,6 +84,7 @@ open class LiveWallpaperService : WallpaperService() {
         @OptIn(UnstableApi::class)
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
+            setTouchEventsEnabled(true)
             currentSurfaceHolder = surfaceHolder
             prefs = WallpaperPreferences(applicationContext)
             keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
@@ -120,6 +129,9 @@ open class LiveWallpaperService : WallpaperService() {
                                 val d = duration
                                 if (d > 0L) {
                                     videoDurationMs = d
+                                    activeCurve?.let { curve ->
+                                        splitPositionMs = ((curve.splitIndex.toFloat() / 260f) * d).toLong().coerceIn(0L, d)
+                                    }
                                 }
                             } else if (playbackState == Player.STATE_ENDED) {
                                 if (isReversing) {
@@ -200,6 +212,15 @@ open class LiveWallpaperService : WallpaperService() {
                 p.setMediaItem(fwdItem)
                 p.prepare()
                 updateWallpaperColors()
+
+                activeCurve = WallpaperAnimationHelper.getCurveForWallpaper(applicationContext, wallpaperId, playableUriStr)
+                if (activeCurve != null && activeCurve!!.isSupportCurve) {
+                    val d = if (videoDurationMs > 0) videoDurationMs else 4333L
+                    splitPositionMs = ((activeCurve!!.splitIndex.toFloat() / 260f) * d).toLong().coerceIn(0L, d)
+                    Log.d(tag, "Loaded animation curve for $wallpaperId: split=$splitPositionMs ms, rest=${activeCurve!!.startPauseValueMs} ms")
+                } else {
+                    activeCurve = null
+                }
             } catch (e: Exception) {
                 Log.e(tag, "Error loading media item: $playableUriStr, attempting default wallpaper fallback", e)
                 try {
@@ -261,7 +282,7 @@ open class LiveWallpaperService : WallpaperService() {
                 val isLockScreen = !isUserUnlocked && isLocked
                 if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
                     if (!hasPlayedThisSession || prefs.replayOnHomeReturn) {
-                        if (replayVideo()) {
+                        if (playUnlockTransition()) {
                             hasPlayedThisSession = true
                         }
                     } else if (player?.playbackState != Player.STATE_ENDED) {
@@ -283,7 +304,7 @@ open class LiveWallpaperService : WallpaperService() {
                 }
                 val isLockScreen = !isUserUnlocked && isLocked
                 if (!isLockScreen || prefs.trigger == PlaybackTrigger.SCREEN_ON) {
-                    if (replayVideo()) {
+                    if (playUnlockTransition()) {
                         hasPlayedThisSession = true
                     }
                 }
@@ -320,7 +341,8 @@ open class LiveWallpaperService : WallpaperService() {
                         p.setMediaItem(fwdItem)
                         p.videoScalingMode = getDesiredScalingMode()
                     }
-                    player?.seekTo(0)
+                    val restPos = activeCurve?.startPauseValueMs ?: 0L
+                    player?.seekTo(restPos)
                     player?.pause()
                     startUnlockMonitor()
                     return
@@ -386,6 +408,74 @@ open class LiveWallpaperService : WallpaperService() {
                 }
             }
             return super.onCommand(action, x, y, z, extras, resultRequested)
+        }
+
+        override fun onTouchEvent(event: MotionEvent) {
+            super.onTouchEvent(event)
+            val curve = activeCurve
+            val isLocked = keyguardManager?.isKeyguardLocked ?: false
+            val isLockScreen = !isUserUnlocked && isLocked
+
+            // Only enable interactive scrubbing on the lock screen when a curve is present
+            if (curve == null || !isLockScreen || !curve.isSupportCurve) {
+                return
+            }
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchStartY = event.y
+                    isTouchDragging = true
+                    springSnapJob?.cancel()
+                    springSnapJob = null
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (isTouchDragging) {
+                        val deltaY = touchStartY - event.y // positive when swiping up
+                        val sensitivity = splitPositionMs.toFloat() / (curve.slideCountThreshold * 8f).coerceAtLeast(600f)
+                        val targetOffset = (deltaY * sensitivity * (1f / curve.slideDampingRatio.coerceAtLeast(0.1f))).toLong()
+                        val restPos = curve.startPauseValueMs
+                        val newPos = (restPos + targetOffset).coerceIn(0L, splitPositionMs)
+
+                        player?.seekTo(newPos)
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isTouchDragging) {
+                        isTouchDragging = false
+                        animateSpringBackToRest(curve)
+                    }
+                }
+            }
+        }
+
+        private fun animateSpringBackToRest(curve: WallpaperAnimationCurve) {
+            val p = player ?: return
+            val currentPos = p.currentPosition
+            val restPos = curve.startPauseValueMs
+            if (currentPos == restPos) return
+
+            springSnapJob?.cancel()
+            springSnapJob = CoroutineScope(Dispatchers.Main.immediate).launch {
+                val startPos = currentPos
+                val startTime = SystemClock.uptimeMillis()
+                val durationMs = 350L
+
+                while (isActive) {
+                    val elapsed = SystemClock.uptimeMillis() - startTime
+                    val t = (elapsed.toFloat() / durationMs).coerceIn(0f, 1f)
+                    // Overdamped cubic spring curve matching pauseDampingRatio
+                    val factor = 1f - (1f - t) * (1f - t) * (1f - t)
+                    val pos = (startPos + (restPos - startPos) * factor).toLong()
+                    p.seekTo(pos)
+
+                    if (t >= 1f) {
+                        p.seekTo(restPos)
+                        p.pause()
+                        break
+                    }
+                    delay(16)
+                }
+            }
         }
 
         private fun isAodEnabled(): Boolean {
@@ -613,11 +703,12 @@ open class LiveWallpaperService : WallpaperService() {
                             p.setMediaItem(fwdItem)
                             p.videoScalingMode = getDesiredScalingMode()
                         }
-                        player?.seekTo(0)
+                        val restPos = activeCurve?.startPauseValueMs ?: 0L
+                        player?.seekTo(restPos)
                         player?.pause()
                         startUnlockMonitor()
                     } else if (isUserUnlocked && !hasPlayedThisSession) {
-                        if (replayVideo()) {
+                        if (playUnlockTransition()) {
                             hasPlayedThisSession = true
                         }
                     }
@@ -629,11 +720,14 @@ open class LiveWallpaperService : WallpaperService() {
             Log.d(tag, "handleUserPresent: trigger=${prefs.trigger}")
             unlockMonitorJob?.cancel()
             unlockMonitorJob = null
+            springSnapJob?.cancel()
+            springSnapJob = null
+            isTouchDragging = false
             stopReversePlayback()
             isUserUnlocked = true
             // Fired whenever the device is unlocked!
             if (prefs.trigger == PlaybackTrigger.SCREEN_UNLOCK) {
-                if (replayVideo()) {
+                if (playUnlockTransition()) {
                     hasPlayedThisSession = true
                 }
             }
@@ -644,6 +738,9 @@ open class LiveWallpaperService : WallpaperService() {
             Log.d(tag, "handleScreenOff: AOD enabled=$aodOn")
             unlockMonitorJob?.cancel()
             unlockMonitorJob = null
+            springSnapJob?.cancel()
+            springSnapJob = null
+            isTouchDragging = false
             isUserUnlocked = false
             hasPlayedThisSession = false
             if (aodOn) {
@@ -656,9 +753,39 @@ open class LiveWallpaperService : WallpaperService() {
                     p.setMediaItem(fwdItem)
                     p.videoScalingMode = getDesiredScalingMode()
                 }
+                val restPos = activeCurve?.startPauseValueMs ?: 0L
                 player?.pause()
-                player?.seekTo(0)
+                player?.seekTo(restPos)
             }
+        }
+
+        private fun playUnlockTransition(): Boolean {
+            val curve = activeCurve
+            val p = player ?: return false
+            val fwdItem = forwardMediaItem ?: return false
+            val surface = currentSurfaceHolder?.surface
+            if (surface != null && surface.isValid) {
+                p.setVideoSurface(surface)
+                if (p.currentMediaItem != fwdItem) {
+                    p.setMediaItem(fwdItem)
+                    p.prepare()
+                } else if (p.playbackState == Player.STATE_IDLE) {
+                    p.prepare()
+                }
+                p.videoScalingMode = getDesiredScalingMode()
+                if (curve != null && curve.isSplit) {
+                    val startUnlockPos = splitPositionMs
+                    Log.d(tag, "playUnlockTransition: curve active, playing unlock segment from $startUnlockPos ms to end")
+                    p.seekTo(startUnlockPos)
+                    p.play()
+                } else {
+                    p.seekTo(0)
+                    p.play()
+                }
+                return true
+            }
+            Log.d(tag, "playUnlockTransition deferred: surface is not yet valid")
+            return false
         }
 
         private fun replayVideo(): Boolean {
@@ -722,6 +849,8 @@ open class LiveWallpaperService : WallpaperService() {
             super.onDestroy()
             unlockMonitorJob?.cancel()
             unlockMonitorJob = null
+            springSnapJob?.cancel()
+            springSnapJob = null
             stopReversePlayback()
             try {
                 if (wakeLock?.isHeld == true) {

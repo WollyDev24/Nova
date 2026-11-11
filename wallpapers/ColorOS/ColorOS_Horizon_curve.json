@@ -1,0 +1,16 @@
+{
+  "slideDampingRatio": 0.9,
+  "slideStiffness": 575,
+  "pauseDampingRatio": 2.0,
+  "pauseStiffness": 100,
+  "unlockDampingRatio": 1.0,
+  "unlockStiffness": 631,
+  "startPauseValue": 1061,
+  "slideCountThreshold": 110,
+  "drawTime": 10,
+  "unlockType": 1,
+  "splitIndex": 180,
+  "isSplit": true,
+  "reverseStiffness": 70,
+  "isSupportCurve": true
+}

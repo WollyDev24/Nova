@@ -147,6 +147,17 @@ data class WallpaperItem(
                 description = "Signature ColorOS fluid sunset silk wave dynamic animation."
             ),
             WallpaperItem(
+                id = "coloros_horizon",
+                title = "ColorOS Horizon",
+                collection = "ColorOS",
+                videoUri = "asset:///wallpapers/ColorOS/ColorOS_Horizon.mp4",
+                thumbnailUri = "file:///android_asset/thumbnails/ColorOS/ColorOS_Horizon.webp",
+                previewThumbnailUri = "file:///android_asset/thumbnails/start/ColorOS/ColorOS_Horizon.webp",
+                durationSec = 4.33f,
+                resolution = "1080x2400",
+                description = "Interactive ColorOS port horizon wallpaper with real-time lock screen sliding and seamless unlock transition."
+            ),
+            WallpaperItem(
                 id = "pixel_11_fold_midnight",
                 title = "Midnight",
                 collection = "Pixel 11 Fold",

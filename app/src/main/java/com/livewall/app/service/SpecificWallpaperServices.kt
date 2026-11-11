@@ -1,6 +1,7 @@
 package com.livewall.app.service
 
 class ColorOSWallpaperService : LiveWallpaperService()
+class ColorOSHorizonWallpaperService : LiveWallpaperService()
 class XiaomiLight01WallpaperService : LiveWallpaperService()
 class XiaomiLight02WallpaperService : LiveWallpaperService()
 class XiaomiLight03WallpaperService : LiveWallpaperService()

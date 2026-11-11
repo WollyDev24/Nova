@@ -54,6 +54,16 @@
         </service>
 
         <service
+            android:name=".service.ColorOSHorizonWallpaperService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="ColorOS Horizon"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/wallpaper_coloros_horizon" />
+        </service>
+
+        <service
             android:name=".service.XiaomiLight01WallpaperService"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"

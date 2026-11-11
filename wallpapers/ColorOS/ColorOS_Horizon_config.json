@@ -1,0 +1,10 @@
+{
+  "name" : {
+    "en":"舷境",
+    "cn":"舷境"
+  },
+  "description": {
+    "cn": "在锁屏上下滑动壁纸会显示动态变化"
+  },
+  "extraUnfoldType": 1
+}
